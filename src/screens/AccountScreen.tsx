@@ -79,7 +79,11 @@ const AccountScreen = ({ navigation }: { navigation: any }) => {
           onPress={() => navigation.navigate('ProfileSetup', { isEditing: true })} 
         />
         <AccountOption icon="credit-card" label="Payments & UPI" onPress={() => {}} />
-        <AccountOption icon="bell" label="Notifications" onPress={() => {}} />
+        <AccountOption 
+          icon="bell" 
+          label="Notifications" 
+          onPress={() => navigation.navigate('Notifications')} 
+        />
         <AccountOption icon="headphones" label="Rider Support" onPress={() => {}} />
       </View>
       
