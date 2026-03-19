@@ -3,4 +3,5 @@ export type AuthStackParamList = {
   SignUp: undefined;
   ProfileSetup: { isEditing?: boolean };
   MainTabs: undefined;
+  Notifications: undefined;
 };
