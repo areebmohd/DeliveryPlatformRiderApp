@@ -62,6 +62,7 @@ const LoginScreen = ({ navigation }: Props) => {
             <TextInput
               style={styles.input}
               placeholder="e.g. rider@example.com"
+              placeholderTextColor="#999"
               value={email}
               onChangeText={setEmail}
               autoCapitalize="none"
@@ -74,6 +75,7 @@ const LoginScreen = ({ navigation }: Props) => {
             <TextInput
               style={styles.input}
               placeholder="Enter your password"
+              placeholderTextColor="#999"
               value={password}
               onChangeText={setPassword}
               secureTextEntry

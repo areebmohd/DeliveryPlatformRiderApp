@@ -70,6 +70,7 @@ const SignUpScreen = ({ navigation }: Props) => {
             <TextInput
               style={styles.input}
               placeholder="e.g. rider@example.com"
+              placeholderTextColor="#999"
               value={email}
               onChangeText={setEmail}
               autoCapitalize="none"
@@ -81,7 +82,8 @@ const SignUpScreen = ({ navigation }: Props) => {
             <Text style={styles.label}>Password</Text>
             <TextInput
               style={styles.input}
-              placeholder="Enter your password"
+              placeholder="Min. 8 characters"
+              placeholderTextColor="#999"
               value={password}
               onChangeText={setPassword}
               secureTextEntry
@@ -93,7 +95,8 @@ const SignUpScreen = ({ navigation }: Props) => {
             <Text style={styles.label}>Confirm Password</Text>
             <TextInput
               style={styles.input}
-              placeholder="Confirm your password"
+              placeholder="Repeat your password"
+              placeholderTextColor="#999"
               value={confirmPassword}
               onChangeText={setConfirmPassword}
               secureTextEntry
