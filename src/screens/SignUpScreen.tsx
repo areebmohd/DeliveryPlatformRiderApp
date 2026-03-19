@@ -35,22 +35,51 @@ const SignUpScreen = ({ navigation }: Props) => {
     }
 
     setLoading(true);
-    const {
-      data: { session },
-      error,
-    } = await supabase.auth.signUp({
-      email: email,
-      password: password,
-    });
+    try {
+      // Check if email already exists in any role
+      const { data: existingRole, error: checkError } = await supabase.rpc('check_email_exists', {
+        email_to_check: email.toLowerCase().trim(),
+      });
 
-    if (error) {
-      Alert.alert('Sign up failed', error.message);
-    } else if (!session) {
-      Alert.alert('Success', 'Please check your email for the verification link!');
-      navigation.navigate('Login');
+      if (checkError) {
+        console.error('Error checking email existence:', checkError);
+      } else if (existingRole) {
+        Alert.alert(
+          'Email Already Registered',
+          `This email is already registered as a ${existingRole}. One email can only be used for one account type. Please sign in or use a different email.`
+        );
+        setLoading(false);
+        return;
+      }
+
+      const {
+        data: { session },
+        error,
+      } = await supabase.auth.signUp({
+        email: email.toLowerCase().trim(),
+        password: password,
+        options: {
+          data: {
+            role: 'rider',
+          },
+        },
+      });
+
+      if (error) {
+        if (error.message.includes('already registered')) {
+          Alert.alert('Account Exists', 'An account with this email already exists. Please login instead.');
+          return;
+        }
+        Alert.alert('Sign up failed', error.message);
+      } else if (!session) {
+        Alert.alert('Success', 'Please check your email for the verification link!');
+        navigation.navigate('Login');
+      }
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'An unexpected error occurred');
+    } finally {
+      setLoading(false);
     }
-    
-    setLoading(false);
   }
 
   return (
