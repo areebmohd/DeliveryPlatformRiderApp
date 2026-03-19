@@ -1,6 +1,8 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { supabase } from '../lib/supabaseClient';
+import { User } from '@supabase/supabase-js';
 
 const AccountOption = ({ icon, label, onPress }: { icon: string; label: string; onPress: () => void }) => (
   <TouchableOpacity style={styles.optionContainer} onPress={onPress}>
@@ -13,14 +15,27 @@ const AccountOption = ({ icon, label, onPress }: { icon: string; label: string; 
 );
 
 const AccountScreen = () => {
+  const [user, setUser] = useState<User | null>(null);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      setUser(user);
+    });
+  }, []);
+
+  const handleLogout = async () => {
+    const { error } = await supabase.auth.signOut();
+    if (error) Alert.alert('Error signing out', error.message);
+  };
+
   return (
     <ScrollView style={styles.container}>
       <View style={styles.header}>
         <View style={styles.avatarContainer}>
           <Icon name="account-circle" size={80} color="#dee2e6" />
         </View>
-        <Text style={styles.title}>Rider Name</Text>
-        <Text style={styles.subtitle}>rider@example.com</Text>
+        <Text style={styles.title}>{user?.email?.split('@')[0] || 'Rider'}</Text>
+        <Text style={styles.subtitle}>{user?.email || 'Loading...'}</Text>
       </View>
 
       <View style={styles.optionsSection}>
@@ -29,7 +44,7 @@ const AccountScreen = () => {
         <AccountOption icon="headphones" label="Rider Support" onPress={() => {}} />
       </View>
       
-      <TouchableOpacity style={styles.logoutButton}>
+      <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
         <Text style={styles.logoutText}>Logout</Text>
       </TouchableOpacity>
     </ScrollView>
