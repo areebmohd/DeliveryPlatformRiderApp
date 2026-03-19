@@ -14,14 +14,39 @@ const AccountOption = ({ icon, label, onPress }: { icon: string; label: string; 
   </TouchableOpacity>
 );
 
-const AccountScreen = () => {
+const AccountScreen = ({ navigation }: { navigation: any }) => {
   const [user, setUser] = useState<User | null>(null);
+  const [profile, setProfile] = useState<any>(null);
+  const [address, setAddress] = useState<any>(null);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      setUser(user);
-    });
+    fetchData();
   }, []);
+
+  async function fetchData() {
+    setLoading(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    setUser(user);
+
+    if (user) {
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+      setProfile(profileData);
+
+      const { data: addressData } = await supabase
+        .from('addresses')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('is_default', true)
+        .single();
+      setAddress(addressData);
+    }
+    setLoading(false);
+  }
 
   const handleLogout = async () => {
     const { error } = await supabase.auth.signOut();
@@ -29,24 +54,45 @@ const AccountScreen = () => {
   };
 
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 40 }}>
       <View style={styles.header}>
         <View style={styles.avatarContainer}>
-          <Icon name="account-circle" size={80} color="#dee2e6" />
+          <Icon name="account-circle" size={80} color="#007bff" />
         </View>
-        <Text style={styles.title}>{user?.email?.split('@')[0] || 'Rider'}</Text>
-        <Text style={styles.subtitle}>{user?.email || 'Loading...'}</Text>
+        <Text style={styles.title}>{profile?.full_name || 'Rider'}</Text>
+        <Text style={styles.subtitle}>{profile?.phone || 'No phone added'}</Text>
+        
+        {address && (
+          <View style={styles.addressBadge}>
+            <Icon name="map-marker" size={14} color="#6c757d" />
+            <Text style={styles.addressText}>
+              {address.address_line}, {address.city}
+            </Text>
+          </View>
+        )}
       </View>
 
       <View style={styles.optionsSection}>
-        <AccountOption icon="credit-card" label="Payments" onPress={() => {}} />
+        <AccountOption 
+          icon="account-edit" 
+          label="Edit Profile" 
+          onPress={() => navigation.navigate('ProfileSetup', { isEditing: true })} 
+        />
+        <AccountOption icon="credit-card" label="Payments & UPI" onPress={() => {}} />
         <AccountOption icon="bell" label="Notifications" onPress={() => {}} />
         <AccountOption icon="headphones" label="Rider Support" onPress={() => {}} />
       </View>
       
-      <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-        <Text style={styles.logoutText}>Logout</Text>
-      </TouchableOpacity>
+      <View style={styles.footer}>
+        <View style={styles.infoBox}>
+          <Icon name="email-outline" size={20} color="#6c757d" />
+          <Text style={styles.loginEmail}>{user?.email}</Text>
+        </View>
+        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+          <Icon name="logout-variant" size={20} color="#dc3545" />
+          <Text style={styles.logoutText}>Sign Out</Text>
+        </TouchableOpacity>
+      </View>
     </ScrollView>
   );
 };
@@ -102,20 +148,59 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#495057',
   },
-  logoutButton: {
+  addressBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#e9ecef',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 20,
+    marginTop: 10,
+  },
+  addressText: {
+    fontSize: 12,
+    color: '#6c757d',
+    marginLeft: 4,
+  },
+  footer: {
     marginTop: 40,
-    marginHorizontal: 20,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+  },
+  infoBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8f9fa',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e9ecef',
+    marginBottom: 15,
+    width: '100%',
+  },
+  loginEmail: {
+    fontSize: 14,
+    color: '#495057',
+    marginLeft: 10,
+    fontWeight: '500',
+  },
+  logoutButton: {
+    flexDirection: 'row',
+    width: '100%',
     padding: 16,
-    backgroundColor: '#fff',
+    backgroundColor: '#fff1f2',
     borderRadius: 12,
     alignItems: 'center',
+    justifyContent: 'center',
     borderWidth: 1,
-    borderColor: '#ff6b6b',
+    borderColor: '#fecaca',
   },
   logoutText: {
-    color: '#ff6b6b',
+    color: '#dc3545',
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
+    marginLeft: 10,
   },
 });
 
