@@ -141,8 +141,11 @@ const ProfileSetupScreen = ({ navigation, route }: Props) => {
 
     setLoading(false);
     if (!isEditing) {
-      // In App.tsx we'll handle the state change to show Dashboard
-      Alert.alert('Success', 'Profile setup complete!');
+      Alert.alert(
+        'Success', 
+        'Profile setup complete! You will be redirected to the dashboard in a moment.',
+        [{ text: 'OK' }]
+      );
     } else {
       Alert.alert('Success', 'Profile updated!');
       navigation.goBack();
