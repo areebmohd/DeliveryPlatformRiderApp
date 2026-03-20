@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { View, ActivityIndicator } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Session } from '@supabase/supabase-js';
 import { supabase } from './src/lib/supabaseClient';
@@ -14,11 +15,16 @@ const Stack = createNativeStackNavigator<AuthStackParamList>();
 function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [profileComplete, setProfileComplete] = useState<boolean | null>(null);
+  const [initialLoading, setInitialLoading] = useState(true);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
-      if (session) checkProfile(session.user.id);
+      if (session) {
+        checkProfile(session.user.id);
+      } else {
+        setInitialLoading(false);
+      }
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -27,6 +33,7 @@ function App() {
         checkProfile(session.user.id);
       } else {
         setProfileComplete(null);
+        setInitialLoading(false);
       }
     });
 
@@ -34,23 +41,54 @@ function App() {
   }, []);
 
   async function checkProfile(userId: string) {
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('full_name, phone')
-      .eq('id', userId)
-      .single();
+    try {
+      const { data: profile, error } = await supabase
+        .from('profiles')
+        .select('full_name, phone, role, upi_id')
+        .eq('id', userId)
+        .single();
 
-    const isComplete = !!(profile?.full_name && profile?.phone);
-    setProfileComplete(isComplete);
+      if (error) {
+        console.error('Error fetching profile:', error);
+        setProfileComplete(false);
+        setInitialLoading(false);
+        return;
+      }
+
+      // Rider profile is complete if they have name, phone, role is rider, and upi_id is present
+      const isComplete = !!(
+        profile?.full_name && 
+        profile?.phone && 
+        profile?.role === 'rider' && 
+        profile?.upi_id
+      );
+      
+      setProfileComplete(isComplete);
+    } catch (err) {
+      console.error('Unexpected error in checkProfile:', err);
+      setProfileComplete(false);
+    } finally {
+      setInitialLoading(false);
+    }
   }
 
   // To allow manual refresh after profile setup
   useEffect(() => {
     if (session && profileComplete === false) {
-      const interval = setInterval(() => checkProfile(session.user.id), 3000);
+      const interval = setInterval(() => checkProfile(session.user.id), 2000);
       return () => clearInterval(interval);
     }
   }, [session, profileComplete]);
+
+  if (initialLoading) {
+    return (
+      <SafeAreaProvider>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' }}>
+          <ActivityIndicator size="large" color="#007bff" />
+        </View>
+      </SafeAreaProvider>
+    );
+  }
 
   return (
     <SafeAreaProvider>
