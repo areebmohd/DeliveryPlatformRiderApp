@@ -42,6 +42,7 @@ function App() {
 
   async function checkProfile(userId: string) {
     try {
+      console.log('Checking profile for user:', userId);
       const { data: profile, error } = await supabase
         .from('profiles')
         .select('full_name, phone, role, upi_id')
@@ -49,20 +50,28 @@ function App() {
         .single();
 
       if (error) {
-        console.error('Error fetching profile:', error);
+        if (error.code === 'PGRST116') {
+          console.log('No profile record found for user');
+        } else {
+          console.error('Error fetching profile:', error);
+        }
         setProfileComplete(false);
         setInitialLoading(false);
         return;
       }
 
+      console.log('Profile found:', profile);
+
       // Rider profile is complete if they have name, phone, role is rider, and upi_id is present
+      // We check for truthy values to ensure they are not empty strings or null
       const isComplete = !!(
-        profile?.full_name && 
-        profile?.phone && 
+        profile?.full_name?.trim() && 
+        profile?.phone?.trim() && 
         profile?.role === 'rider' && 
-        profile?.upi_id
+        profile?.upi_id?.trim()
       );
       
+      console.log('Profile isComplete:', isComplete);
       setProfileComplete(isComplete);
     } catch (err) {
       console.error('Unexpected error in checkProfile:', err);

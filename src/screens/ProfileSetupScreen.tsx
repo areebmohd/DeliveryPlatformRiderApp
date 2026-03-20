@@ -28,10 +28,8 @@ const ProfileSetupScreen = ({ navigation, route }: Props) => {
   const [state, setState] = useState('');
 
   useEffect(() => {
-    if (isEditing) {
-      fetchCurrentProfile();
-    }
-  }, [isEditing]);
+    fetchCurrentProfile();
+  }, []);
 
   async function fetchCurrentProfile() {
     setLoading(true);
@@ -78,12 +76,16 @@ const ProfileSetupScreen = ({ navigation, route }: Props) => {
     if (!user) return;
 
     // 1. Update Profile
+    const trimmedFullName = fullName.trim();
+    const trimmedPhone = phone.trim();
+    const trimmedUpiId = upiId.trim();
+
     const { error: profileError } = await supabase
       .from('profiles')
       .update({
-        full_name: fullName,
-        phone: phone,
-        upi_id: upiId,
+        full_name: trimmedFullName,
+        phone: trimmedPhone,
+        upi_id: trimmedUpiId,
         role: 'rider', // Ensure role is rider
       })
       .eq('id', user.id);
@@ -103,14 +105,14 @@ const ProfileSetupScreen = ({ navigation, route }: Props) => {
 
     const addressData = {
       user_id: user.id,
-      address_line: addressLine,
-      pincode: pincode,
-      sector_area: sectorArea,
-      city: city,
-      state: state,
+      address_line: addressLine.trim(),
+      pincode: pincode.trim(),
+      sector_area: sectorArea.trim(),
+      city: city.trim(),
+      state: state.trim(),
       is_default: true,
-      receiver_name: fullName,
-      receiver_phone: phone,
+      receiver_name: trimmedFullName,
+      receiver_phone: trimmedPhone,
     };
 
     if (existingAddress && existingAddress.length > 0) {
@@ -134,9 +136,9 @@ const ProfileSetupScreen = ({ navigation, route }: Props) => {
       .limit(1);
 
     if (!existingRiderProfile || existingRiderProfile.length === 0) {
-      await supabase.from('rider_profiles').insert([{ profile_id: user.id, upi_id: upiId }]);
+      await supabase.from('rider_profiles').insert([{ profile_id: user.id, upi_id: trimmedUpiId }]);
     } else {
-      await supabase.from('rider_profiles').update({ upi_id: upiId }).eq('profile_id', user.id);
+      await supabase.from('rider_profiles').update({ upi_id: trimmedUpiId }).eq('profile_id', user.id);
     }
 
     setLoading(false);
