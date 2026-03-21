@@ -19,3 +19,19 @@ buildscript {
 }
 
 apply plugin: "com.facebook.react.rootproject"
+
+allprojects {
+    repositories {
+        maven {
+            url 'https://maven.mappls.com/repository/mappls/'
+        }
+        google()
+        mavenCentral()
+    }
+
+    configurations.all {
+        resolutionStrategy {
+            force 'com.google.android.gms:play-services-location:21.0.1'
+        }
+    }
+}

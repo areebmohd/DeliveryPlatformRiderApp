@@ -104,7 +104,7 @@ function App() {
       <NavigationContainer>
         {session && session.user ? (
           profileComplete ? (
-            <MainNavigator />
+            <MainNavigator userId={session?.user?.id} />
           ) : (
             <Stack.Navigator screenOptions={{ headerShown: false }}>
               <Stack.Screen 
