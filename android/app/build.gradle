@@ -1,4 +1,8 @@
 apply plugin: "com.android.application"
+project.ext.vectoricons = [
+    iconFontNames: [ 'MaterialCommunityIcons.ttf' ]
+]
+apply from: "../../node_modules/react-native-vector-icons/fonts.gradle"
 apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
 
@@ -117,5 +121,3 @@ dependencies {
         implementation jscFlavor
     }
 }
-
-apply from: "../../node_modules/react-native-vector-icons/fonts.gradle"

@@ -4,4 +4,5 @@ export type AuthStackParamList = {
   ProfileSetup: { isEditing?: boolean };
   MainTabs: undefined;
   Notifications: undefined;
+  DeliveryMap: { orderId: string };
 };
