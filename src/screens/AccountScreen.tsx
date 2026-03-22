@@ -17,7 +17,7 @@ const AccountOption = ({ icon, label, onPress }: { icon: string; label: string; 
 const AccountScreen = ({ navigation }: { navigation: any }) => {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<any>(null);
-  const [address, setAddress] = useState<any>(null);
+  const [isAvailable, setIsAvailable] = useState(false);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -30,23 +30,51 @@ const AccountScreen = ({ navigation }: { navigation: any }) => {
     setUser(user);
 
     if (user) {
-      const { data: profileData } = await supabase
+      const { data: profileData, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', user.id)
         .single();
+      if (error) throw error;
       setProfile(profileData);
 
-      const { data: addressData } = await supabase
-        .from('addresses')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('is_default', true)
+      // Fetch rider profile for availability
+      const { data: riderData } = await supabase
+        .from('rider_profiles')
+        .select('is_available')
+        .eq('profile_id', user.id)
         .single();
-      setAddress(addressData);
+      
+      if (riderData) {
+        setIsAvailable(riderData.is_available);
+      }
     }
     setLoading(false);
   }
+
+  const toggleAvailability = async () => {
+    try {
+      setLoading(true);
+      const newStatus = !isAvailable;
+      
+      const { error } = await supabase
+        .from('rider_profiles')
+        .update({ is_available: newStatus })
+        .eq('profile_id', user?.id);
+
+      if (error) throw error;
+      
+      setIsAvailable(newStatus);
+      Alert.alert(
+        'Success', 
+        `You are now ${newStatus ? 'AVAILABLE' : 'OFF DUTY'}`
+      );
+    } catch (error: any) {
+      Alert.alert('Error', error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleLogout = async () => {
     const { error } = await supabase.auth.signOut();
@@ -67,14 +95,23 @@ const AccountScreen = ({ navigation }: { navigation: any }) => {
         <Text style={styles.title}>{profile?.full_name || 'Rider'}</Text>
         <Text style={styles.subtitle}>{profile?.phone || 'No phone added'}</Text>
         
-        {address && (
-          <View style={styles.addressBadge}>
-            <Icon name="map-marker" size={14} color="#007bff" />
-            <Text style={styles.addressText}>
-              {address.address_line}, {address.city}
-            </Text>
-          </View>
-        )}
+        <TouchableOpacity 
+          style={[
+            styles.availabilityBtn, 
+            isAvailable ? styles.availableOn : styles.availableOff
+          ]}
+          onPress={toggleAvailability}
+          disabled={loading}
+        >
+          <Icon 
+            name={isAvailable ? "check-circle" : "power"} 
+            size={18} 
+            color="#fff" 
+          />
+          <Text style={styles.availabilityText}>
+            {isAvailable ? 'AVAILABLE' : 'GO ONLINE'}
+          </Text>
+        </TouchableOpacity>
       </View>
 
       <View style={styles.optionsSection}>
@@ -189,20 +226,31 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: '#343a40',
   },
-  addressBadge: {
+  availabilityBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f0f7ff',
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 20,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 25,
     marginTop: 15,
+    gap: 8,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
   },
-  addressText: {
-    fontSize: 13,
-    color: '#007bff',
-    fontWeight: '500',
-    marginLeft: 6,
+  availableOn: {
+    backgroundColor: '#28a745',
+  },
+  availableOff: {
+    backgroundColor: '#6c757d',
+  },
+  availabilityText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 14,
+    letterSpacing: 1,
   },
   footer: {
     marginTop: 40,
