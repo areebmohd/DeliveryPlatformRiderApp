@@ -65,16 +65,16 @@ function App() {
 
       console.log('Profile found:', profile);
 
-      // Rider profile is complete if they have name, phone, role is rider, and upi_id is present
-      // We check for truthy values to ensure they are not empty strings or null
-      const isComplete = !!(
-        profile?.full_name?.trim() && 
-        profile?.phone?.trim() && 
-        profile?.role === 'rider' && 
-        profile?.upi_id?.trim()
-      );
+      // A profile is complete if they have name, phone, and upi_id
+      // We also check if the role is 'rider' to ensure they are using the right account
+      const hasName = !!profile?.full_name && profile.full_name.trim().length > 0;
+      const hasPhone = !!profile?.phone && profile.phone.trim().length > 0;
+      const hasUpi = !!profile?.upi_id && profile.upi_id.trim().length > 0;
+      const isRider = profile?.role === 'rider';
+
+      const isComplete = hasName && hasPhone && hasUpi && isRider;
       
-      console.log('Profile isComplete:', isComplete);
+      console.log('Profile Status:', { hasName, hasPhone, hasUpi, isRider, isComplete });
       setProfileComplete(isComplete);
     } catch (err) {
       console.error('Unexpected error in checkProfile:', err);

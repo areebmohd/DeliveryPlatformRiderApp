@@ -104,6 +104,13 @@ const LoginScreen = ({ navigation }: Props) => {
               Don't have an account? <Text style={styles.linkHighlight}>Sign Up</Text>
             </Text>
           </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.forgotBtn}
+            onPress={() => navigation.navigate('ForgotPassword')}
+          >
+            <Text style={styles.forgotBtnText}>Forgot Password?</Text>
+          </TouchableOpacity>
         </View>
       </View>
     </KeyboardAvoidingView>
@@ -184,6 +191,15 @@ const styles = StyleSheet.create({
   linkHighlight: {
     color: '#007bff',
     fontWeight: '700',
+  },
+  forgotBtn: {
+    marginTop: 16,
+    alignItems: 'center',
+  },
+  forgotBtnText: {
+    fontSize: 14,
+    color: '#007bff',
+    fontWeight: '600',
   },
 });
 
