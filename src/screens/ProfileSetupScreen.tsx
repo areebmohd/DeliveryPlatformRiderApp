@@ -156,11 +156,6 @@ const ProfileSetupScreen = ({ navigation, route }: Props) => {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
-      <View style={styles.header}>
-        <Text style={styles.title}>{isEditing ? 'Edit Profile' : 'Rider Information'}</Text>
-        <Text style={styles.subtitle}>Please provide your details to continue</Text>
-      </View>
-
       <View style={styles.form}>
         <Text style={styles.sectionTitle}>Personal Details</Text>
         <TextInput
@@ -240,11 +235,8 @@ const ProfileSetupScreen = ({ navigation, route }: Props) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
+  container: { flex: 1, backgroundColor: '#f8f9fa' },
   scrollContent: { padding: 24, paddingBottom: 40 },
-  header: { marginBottom: 30, marginTop: 20 },
-  title: { fontSize: 28, fontWeight: '800', color: '#212529', marginBottom: 8 },
-  subtitle: { fontSize: 16, color: '#6c757d' },
   form: { width: '100%' },
   sectionTitle: { fontSize: 18, fontWeight: '700', color: '#007bff', marginBottom: 15 },
   input: {

@@ -132,22 +132,6 @@ const DeliveryMapScreen = ({ route, navigation }: any) => {
 
   return (
     <View style={styles.container}>
-      {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top + Spacing.sm }]}>
-        <TouchableOpacity 
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
-          <Icon name="arrow-left" size={24} color={Colors.text} />
-        </TouchableOpacity>
-        <View style={styles.headerInfo}>
-          <Text style={styles.headerTitle}>Delivery Route</Text>
-          <Text style={styles.headerSubtitle}>
-            {selectedOrder ? `Order #${selectedOrder.order_number}` : `${activeOrders.length} active delivery stops`}
-          </Text>
-        </View>
-      </View>
-
       <MapView style={styles.map}>
         <Camera
           ref={cameraRef}
@@ -235,41 +219,6 @@ const styles = StyleSheet.create({
   },
   map: {
     flex: 1,
-  },
-  header: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: Spacing.md,
-    paddingBottom: Spacing.sm,
-    backgroundColor: 'rgba(255,255,255,0.9)',
-    zIndex: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-  },
-  backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: Colors.white,
-    justifyContent: 'center',
-    alignItems: 'center',
-    elevation: 4,
-  },
-  headerInfo: {
-    marginLeft: 12,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: Colors.text,
-  },
-  headerSubtitle: {
-    fontSize: 12,
-    color: Colors.textSecondary,
   },
   marker: {
     width: 36,

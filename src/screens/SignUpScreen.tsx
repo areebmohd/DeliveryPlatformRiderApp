@@ -162,15 +162,15 @@ const SignUpScreen = ({ navigation }: Props) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#f8f9fa',
   },
   scrollContent: {
     padding: 24,
     flexGrow: 1,
-    justifyContent: 'center',
   },
   header: {
     marginBottom: 40,
+    display: 'none',
   },
   logoText: {
     fontSize: 32,

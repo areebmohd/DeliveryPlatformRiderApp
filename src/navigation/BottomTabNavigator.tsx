@@ -6,6 +6,8 @@ import DashboardScreen from '../screens/DashboardScreen';
 import DeliveriesScreen from '../screens/DeliveriesScreen';
 import AccountScreen from '../screens/AccountScreen';
 
+import { Colors } from '../theme/colors';
+
 const Tab = createBottomTabNavigator();
 
 const BottomTabNavigator = () => {
@@ -27,7 +29,16 @@ const BottomTabNavigator = () => {
         },
         tabBarActiveTintColor: '#007bff',
         tabBarInactiveTintColor: 'gray',
-        headerShown: false,
+        headerShown: true,
+        headerStyle: {
+          backgroundColor: Colors.white,
+        },
+        headerTitleStyle: {
+          fontWeight: 'bold',
+          fontSize: 22,
+          color: Colors.text,
+        },
+        headerTitleAlign: 'center',
         tabBarStyle: {
           height: 60,
           paddingBottom: 10,
