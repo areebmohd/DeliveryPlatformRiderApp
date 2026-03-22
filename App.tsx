@@ -10,6 +10,8 @@ import AuthNavigator from './src/navigation/AuthNavigator';
 import ProfileSetupScreen from './src/screens/ProfileSetupScreen';
 import { AuthStackParamList } from './src/navigation/types';
 
+
+
 const Stack = createNativeStackNavigator<AuthStackParamList>();
 
 function App() {
