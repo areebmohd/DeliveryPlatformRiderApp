@@ -8,10 +8,10 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
-  Alert,
   ScrollView,
 } from 'react-native';
 import { supabase } from '../lib/supabaseClient';
+import { useCustomAlert } from '../context/CustomAlertContext';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AuthStackParamList } from '../navigation/types';
 
@@ -22,15 +22,16 @@ const SignUpScreen = ({ navigation }: Props) => {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const { showAlert } = useCustomAlert();
 
   async function signUpWithEmail() {
     if (!email || !password || !confirmPassword) {
-      Alert.alert('Error', 'Please fill in all fields');
+      showAlert('Error', 'Please fill in all fields');
       return;
     }
 
     if (password !== confirmPassword) {
-      Alert.alert('Error', 'Passwords do not match');
+      showAlert('Error', 'Passwords do not match');
       return;
     }
 
@@ -44,7 +45,7 @@ const SignUpScreen = ({ navigation }: Props) => {
       if (checkError) {
         console.error('Error checking email existence:', checkError);
       } else if (existingRole) {
-        Alert.alert(
+        showAlert(
           'Email Already Registered',
           `This email is already registered as a ${existingRole}. One email can only be used for one account type. Please sign in or use a different email.`
         );
@@ -67,16 +68,16 @@ const SignUpScreen = ({ navigation }: Props) => {
 
       if (error) {
         if (error.message.includes('already registered')) {
-          Alert.alert('Account Exists', 'An account with this email already exists. Please login instead.');
+          showAlert('Account Exists', 'An account with this email already exists. Please login instead.');
           return;
         }
-        Alert.alert('Sign up failed', error.message);
+        showAlert('Sign up failed', error.message);
       } else if (!session) {
-        Alert.alert('Success', 'Please check your email for the verification link!');
+        showAlert('Success', 'Please check your email for the verification link!');
         navigation.navigate('Login');
       }
     } catch (e: any) {
-      Alert.alert('Error', e.message || 'An unexpected error occurred');
+      showAlert('Error', e.message || 'An unexpected error occurred');
     } finally {
       setLoading(false);
     }
