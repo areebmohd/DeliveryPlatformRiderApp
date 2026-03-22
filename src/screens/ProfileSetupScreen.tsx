@@ -146,7 +146,13 @@ const ProfileSetupScreen = ({ navigation, route }: Props) => {
     if (!isEditing) {
       showAlert(
         'Success', 
-        'Profile setup complete! You will be redirected to the dashboard in a moment.'
+        'Profile setup complete! Please wait a moment while we set things up.',
+        [{ text: 'OK', onPress: () => {
+          // No explicit navigation needed as App.tsx's interval will catch it,
+          // but we can try to pop to top to trigger a re-render if possible.
+          // However, popping might fail if we're not in a stack.
+          // The interval is at 2 seconds, which is fast enough.
+        }}]
       );
     } else {
       showAlert('Success', 'Profile updated!');
