@@ -83,7 +83,7 @@ const AccountScreen = ({ navigation }: { navigation: any }) => {
           label="Edit Profile" 
           onPress={() => navigation.navigate('ProfileSetup', { isEditing: true })} 
         />
-        <AccountOption icon="credit-card" label="Payments & UPI" onPress={() => {}} />
+        <AccountOption icon="credit-card" label="Payments" onPress={() => {}} />
         <AccountOption 
           icon="bell" 
           label="Notifications" 
