@@ -50,6 +50,7 @@ const DeliveryMapScreen = ({ route, navigation }: any) => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
+      // Fetch both assigned active orders and the specific order requested (could be unassigned)
       const { data, error } = await supabase
         .from('orders')
         .select(`
@@ -57,9 +58,8 @@ const DeliveryMapScreen = ({ route, navigation }: any) => {
           stores:store_id (name, location, address),
           addresses:delivery_address_id (receiver_name, location, address_line, city)
         `)
-        .eq('rider_id', user.id)
-        .in('status', ['accepted', 'preparing', 'ready', 'picked_up'])
-        .order('created_at', { ascending: false });
+        .or(`rider_id.eq.${user.id},id.eq.${orderId}`)
+        .in('status', ['pending_verification', 'accepted', 'preparing', 'ready', 'picked_up']);
 
       if (error) throw error;
       setActiveOrders(data || []);
@@ -85,12 +85,32 @@ const DeliveryMapScreen = ({ route, navigation }: any) => {
 
   const parseLocation = (locString: string) => {
     if (!locString) return null;
+    
+    // If it's a WKT string (e.g. "POINT(77.123 28.123)")
     const match = locString.match(/POINT\(([-\d.]+) ([-\d.]+)\)/);
     if (match) {
       return {
         longitude: parseFloat(match[1]),
         latitude: parseFloat(match[2]),
       };
+    }
+
+    // If it's a hex EWKB string (common from Supabase directly)
+    // EWKB for Point SRID 4326 (Little Endian): 0101000020E6100000<8-byte-X><8-byte-Y>
+    if (locString.length >= 50 && locString.startsWith('0101000020E6100000')) {
+      try {
+        const hexToDouble = (hex: string) => {
+          const buffer = new Uint8Array(hex.match(/.{1,2}/g)!.map(byte => parseInt(byte, 16)));
+          const view = new DataView(buffer.buffer);
+          return view.getFloat64(0, true);
+        };
+        return {
+          longitude: hexToDouble(locString.substring(18, 34)),
+          latitude: hexToDouble(locString.substring(34, 50)),
+        };
+      } catch (e) {
+        console.error('Error parsing hex location:', e);
+      }
     }
     return null;
   };
@@ -105,6 +125,10 @@ const DeliveryMapScreen = ({ route, navigation }: any) => {
 
   // Selected order for highlighting or info card
   const selectedOrder = activeOrders.find(o => o.id === orderId) || activeOrders[0];
+  const storeLoc = selectedOrder ? parseLocation(selectedOrder.stores?.location) : null;
+  const initialCenter = storeLoc 
+    ? [storeLoc.longitude, storeLoc.latitude] 
+    : (riderLocation ? [riderLocation.longitude, riderLocation.latitude] : [77.2090, 28.6139]);
 
   return (
     <View style={styles.container}>
@@ -117,16 +141,18 @@ const DeliveryMapScreen = ({ route, navigation }: any) => {
           <Icon name="arrow-left" size={24} color={Colors.text} />
         </TouchableOpacity>
         <View style={styles.headerInfo}>
-          <Text style={styles.headerTitle}>Active Route</Text>
-          <Text style={styles.headerSubtitle}>{activeOrders.length} active delivery stops</Text>
+          <Text style={styles.headerTitle}>Delivery Route</Text>
+          <Text style={styles.headerSubtitle}>
+            {selectedOrder ? `Order #${selectedOrder.order_number}` : `${activeOrders.length} active delivery stops`}
+          </Text>
         </View>
       </View>
 
       <MapView style={styles.map}>
         <Camera
           ref={cameraRef}
-          zoomLevel={11}
-          centerCoordinate={riderLocation ? [riderLocation.longitude, riderLocation.latitude] : [77.2090, 28.6139]}
+          zoomLevel={14}
+          centerCoordinate={initialCenter}
         />
 
         {/* Rider Marker */}
