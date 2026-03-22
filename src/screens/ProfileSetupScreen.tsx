@@ -6,10 +6,10 @@ import {
   TextInput,
   TouchableOpacity,
   ScrollView,
-  Alert,
   ActivityIndicator,
 } from 'react-native';
 import { supabase } from '../lib/supabaseClient';
+import { useCustomAlert } from '../context/CustomAlertContext';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AuthStackParamList } from '../navigation/types';
 
@@ -19,6 +19,7 @@ const ProfileSetupScreen = ({ navigation, route }: Props) => {
   const isEditing = route.params?.isEditing || false;
   const [loading, setLoading] = useState(false);
   const [fullName, setFullName] = useState('');
+  const { showAlert } = useCustomAlert();
   const [phone, setPhone] = useState('');
   const [upiId, setUpiId] = useState('');
   const [addressLine, setAddressLine] = useState('');
@@ -67,7 +68,7 @@ const ProfileSetupScreen = ({ navigation, route }: Props) => {
 
   async function handleSave() {
     if (!fullName || !phone || !upiId || !addressLine || !pincode || !city || !state) {
-      Alert.alert('Error', 'Please fill all mandatory fields');
+      showAlert('Error', 'Please fill all mandatory fields');
       return;
     }
 
@@ -91,7 +92,7 @@ const ProfileSetupScreen = ({ navigation, route }: Props) => {
       .eq('id', user.id);
 
     if (profileError) {
-      Alert.alert('Error updating profile', profileError.message);
+      showAlert('Error updating profile', profileError.message);
       setLoading(false);
       return;
     }
@@ -120,12 +121,12 @@ const ProfileSetupScreen = ({ navigation, route }: Props) => {
         .from('addresses')
         .update(addressData)
         .eq('id', existingAddress[0].id);
-      if (addressError) Alert.alert('Error updating address', addressError.message);
+      if (addressError) showAlert('Error updating address', addressError.message);
     } else {
       const { error: addressError } = await supabase
         .from('addresses')
         .insert([addressData]);
-      if (addressError) Alert.alert('Error saving address', addressError.message);
+      if (addressError) showAlert('Error saving address', addressError.message);
     }
 
     // 3. Update/Create Rider Profile
@@ -143,13 +144,12 @@ const ProfileSetupScreen = ({ navigation, route }: Props) => {
 
     setLoading(false);
     if (!isEditing) {
-      Alert.alert(
+      showAlert(
         'Success', 
-        'Profile setup complete! You will be redirected to the dashboard in a moment.',
-        [{ text: 'OK' }]
+        'Profile setup complete! You will be redirected to the dashboard in a moment.'
       );
     } else {
-      Alert.alert('Success', 'Profile updated!');
+      showAlert('Success', 'Profile updated!');
       navigation.goBack();
     }
   }

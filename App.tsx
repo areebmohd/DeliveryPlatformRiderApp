@@ -9,6 +9,7 @@ import MainNavigator from './src/navigation/MainNavigator';
 import AuthNavigator from './src/navigation/AuthNavigator';
 import ProfileSetupScreen from './src/screens/ProfileSetupScreen';
 import { AuthStackParamList } from './src/navigation/types';
+import { CustomAlertProvider } from './src/context/CustomAlertContext';
 
 
 
@@ -103,23 +104,25 @@ function App() {
 
   return (
     <SafeAreaProvider>
-      <NavigationContainer>
-        {session && session.user ? (
-          profileComplete ? (
-            <MainNavigator userId={session?.user?.id} />
+      <CustomAlertProvider>
+        <NavigationContainer>
+          {session && session.user ? (
+            profileComplete ? (
+              <MainNavigator userId={session?.user?.id} />
+            ) : (
+              <Stack.Navigator screenOptions={{ headerShown: false }}>
+                <Stack.Screen 
+                  name="ProfileSetup" 
+                  component={ProfileSetupScreen} 
+                  initialParams={{ isEditing: false }} 
+                />
+              </Stack.Navigator>
+            )
           ) : (
-            <Stack.Navigator screenOptions={{ headerShown: false }}>
-              <Stack.Screen 
-                name="ProfileSetup" 
-                component={ProfileSetupScreen} 
-                initialParams={{ isEditing: false }} 
-              />
-            </Stack.Navigator>
-          )
-        ) : (
-          <AuthNavigator />
-        )}
-      </NavigationContainer>
+            <AuthNavigator />
+          )}
+        </NavigationContainer>
+      </CustomAlertProvider>
     </SafeAreaProvider>
   );
 }

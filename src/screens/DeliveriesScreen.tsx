@@ -14,6 +14,7 @@ import { supabase } from '../lib/supabaseClient';
 import { Colors, Spacing, BorderRadius } from '../theme/colors';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useCustomAlert } from '../context/CustomAlertContext';
 
 const DeliveriesScreen = ({ navigation }: any) => {
   const insets = useSafeAreaInsets();
@@ -22,24 +23,41 @@ const DeliveriesScreen = ({ navigation }: any) => {
   const [orders, setOrders] = useState<any[]>([]);
   const [sections, setSections] = useState<any[]>([]);
   const [otpInputs, setOtpInputs] = useState<{ [key: string]: string }>({});
+  const { showAlert } = useCustomAlert();
 
   const fetchOrders = useCallback(async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Fetch all relevant orders:
-      // 1. Unassigned orders in 'pending_verification', 'accepted', 'ready'
-      // 2. Orders assigned to the current rider
-      const { data, error } = await supabase
+      // Check rider availability first
+      const { data: riderProfile } = await supabase
+        .from('rider_profiles')
+        .select('is_available')
+        .eq('profile_id', user.id)
+        .single();
+
+      const isRiderAvailable = riderProfile?.is_available || false;
+
+      // Base query
+      let query = supabase
         .from('orders')
         .select(`
           *,
           stores:store_id (*),
           addresses:delivery_address_id (*),
           order_items (*)
-        `)
-        .or(`rider_id.eq.${user.id},and(rider_id.is.null,status.in.(pending_verification,accepted,ready))`);
+        `);
+
+      if (isRiderAvailable) {
+        // If available, show their orders OR unassigned orders
+        query = query.or(`rider_id.eq.${user.id},and(rider_id.is.null,status.in.(pending_verification,accepted,ready))`);
+      } else {
+        // If NOT available, ONLY show their currently assigned/active orders
+        query = query.eq('rider_id', user.id);
+      }
+
+      const { data, error } = await query.order('created_at', { ascending: false });
 
       if (error) throw error;
 
@@ -75,7 +93,6 @@ const DeliveriesScreen = ({ navigation }: any) => {
       const sectionData = sortedLabels.map(key => ({
         title: key,
         data: grouped[key].sort((a: any, b: any) => {
-          // Inner sort: Active/Available first, then by time (newest first)
           const isAHistory = a.status === 'delivered' || a.status === 'cancelled';
           const isBHistory = b.status === 'delivered' || b.status === 'cancelled';
           if (isAHistory && !isBHistory) return 1;
@@ -87,11 +104,12 @@ const DeliveriesScreen = ({ navigation }: any) => {
       setSections(sectionData);
     } catch (error: any) {
       console.error('Error fetching orders:', error.message);
+      showAlert('Error', 'Failed to fetch orders. Please try again.');
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [showAlert]);
 
   const renderOrder = (order: any) => {
     const isHistory = order.status === 'delivered' || order.status === 'cancelled';
@@ -269,10 +287,10 @@ const DeliveriesScreen = ({ navigation }: any) => {
         .eq('id', orderId);
 
       if (error) throw error;
-      Alert.alert('Success', 'Order accepted! It is now in your active deliveries.');
+      showAlert('Success', 'Order accepted! It is now in your active deliveries.');
       fetchOrders();
     } catch (error: any) {
-      Alert.alert('Error', error.message);
+      showAlert('Error', error.message);
     } finally {
       setLoading(false);
     }
@@ -287,10 +305,10 @@ const DeliveriesScreen = ({ navigation }: any) => {
         .eq('id', orderId);
 
       if (error) throw error;
-      Alert.alert('Success', 'Order marked as picked up!');
+      showAlert('Success', 'Order marked as picked up!');
       fetchOrders();
     } catch (error: any) {
-      Alert.alert('Error', error.message);
+      showAlert('Error', error.message);
     } finally {
       setLoading(false);
     }
@@ -299,7 +317,7 @@ const DeliveriesScreen = ({ navigation }: any) => {
   const handleCompleteOrder = async (orderId: string, correctOtp: string) => {
     const enteredOtp = otpInputs[orderId];
     if (enteredOtp !== correctOtp) {
-      Alert.alert('Invalid OTP', 'The OTP entered is incorrect. Please ask the customer for the correct OTP.');
+      showAlert('Invalid OTP', 'The OTP entered is incorrect. Please ask the customer for the correct OTP.');
       return;
     }
 
@@ -314,10 +332,10 @@ const DeliveriesScreen = ({ navigation }: any) => {
         .eq('id', orderId);
 
       if (error) throw error;
-      Alert.alert('Success', 'Order delivered successfully!');
+      showAlert('Success', 'Order delivered successfully!');
       fetchOrders();
     } catch (error: any) {
-      Alert.alert('Error', error.message);
+      showAlert('Error', error.message);
     } finally {
       setLoading(false);
     }

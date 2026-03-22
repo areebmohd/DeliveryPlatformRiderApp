@@ -8,9 +8,9 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
-  Alert,
 } from 'react-native';
 import { supabase } from '../lib/supabaseClient';
+import { useCustomAlert } from '../context/CustomAlertContext';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AuthStackParamList } from '../navigation/types';
 
@@ -20,11 +20,12 @@ const LoginScreen = ({ navigation }: Props) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const { showAlert } = useCustomAlert();
 
   async function signInWithEmail() {
     console.log('Attempting login for:', email);
     if (!email || !password) {
-      Alert.alert('Error', 'Please enter both email and password');
+      showAlert('Error', 'Please enter both email and password');
       return;
     }
 
@@ -37,10 +38,10 @@ const LoginScreen = ({ navigation }: Props) => {
 
       console.log('Login result:', { data, error });
 
-      if (error) Alert.alert('Login failed', error.message);
+      if (error) showAlert('Login failed', error.message);
     } catch (err) {
       console.log('Login exception:', err);
-      Alert.alert('Login Error', 'An unexpected error occurred');
+      showAlert('Login Error', 'An unexpected error occurred');
     }
     setLoading(false);
   }

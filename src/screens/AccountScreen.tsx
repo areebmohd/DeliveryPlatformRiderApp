@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from 'rea
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { supabase } from '../lib/supabaseClient';
 import { User } from '@supabase/supabase-js';
+import { useCustomAlert } from '../context/CustomAlertContext';
 
 const AccountOption = ({ icon, label, onPress }: { icon: string; label: string; onPress: () => void }) => (
   <TouchableOpacity style={styles.optionContainer} onPress={onPress}>
@@ -19,6 +20,7 @@ const AccountScreen = ({ navigation }: { navigation: any }) => {
   const [profile, setProfile] = useState<any>(null);
   const [isAvailable, setIsAvailable] = useState(false);
   const [loading, setLoading] = useState(false);
+  const { showAlert } = useCustomAlert();
 
   useEffect(() => {
     fetchData();
@@ -65,20 +67,33 @@ const AccountScreen = ({ navigation }: { navigation: any }) => {
       if (error) throw error;
       
       setIsAvailable(newStatus);
-      Alert.alert(
-        'Success', 
-        `You are now ${newStatus ? 'AVAILABLE' : 'OFF DUTY'}`
+      showAlert(
+        'Status Updated', 
+        `You are now ${newStatus ? 'online and ready for deliveries' : 'offline'}`
       );
     } catch (error: any) {
-      Alert.alert('Error', error.message);
+      showAlert('Error', error.message);
     } finally {
       setLoading(false);
     }
   };
 
   const handleLogout = async () => {
-    const { error } = await supabase.auth.signOut();
-    if (error) Alert.alert('Error signing out', error.message);
+    showAlert(
+      'Sign Out',
+      'Are you sure you want to sign out?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Sign Out', 
+          style: 'destructive',
+          onPress: async () => {
+            const { error } = await supabase.auth.signOut();
+            if (error) showAlert('Error', error.message);
+          }
+        }
+      ]
+    );
   };
 
   return (

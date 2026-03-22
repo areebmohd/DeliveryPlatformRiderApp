@@ -1,10 +1,12 @@
 import { useEffect, useRef } from 'react';
-import { Platform, PermissionsAndroid, Alert } from 'react-native';
+import { Platform, PermissionsAndroid } from 'react-native';
 import Geolocation from 'react-native-geolocation-service';
 import { supabase } from '../lib/supabaseClient';
+import { useCustomAlert } from '../context/CustomAlertContext';
 
 export const useRiderLocation = (userId: string | undefined) => {
   const watchId = useRef<number | null>(null);
+  const { showAlert } = useCustomAlert();
 
   useEffect(() => {
     if (!userId) return;
@@ -22,7 +24,7 @@ export const useRiderLocation = (userId: string | undefined) => {
           }
         );
         if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
-          Alert.alert('Permission Denied', 'Location permission is required for deliveries.');
+          showAlert('Permission Denied', 'Location permission is required for deliveries.');
           return;
         }
       }
@@ -82,5 +84,5 @@ export const useRiderLocation = (userId: string | undefined) => {
       // but the user said "when he opens the app".
       updateRiderStatus(false);
     };
-  }, [userId]);
+  }, [userId, showAlert]);
 };
