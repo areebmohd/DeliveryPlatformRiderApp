@@ -9,11 +9,12 @@ import {
   Dimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { MapView, Camera, PointAnnotation } from 'mappls-map-react-native';
+import { MapView, Camera, PointAnnotation, ShapeSource, LineLayer } from 'mappls-map-react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { supabase } from '../lib/supabaseClient';
-import { Colors, Spacing } from '../theme/colors';
+import { Colors, Spacing, BorderRadius } from '../theme/colors';
 import Geolocation from 'react-native-geolocation-service';
+import { MAP_SDK_KEY, REST_API_KEY } from '@env';
 
 const { width, height } = Dimensions.get('window');
 
@@ -25,6 +26,8 @@ const DeliveryMapScreen = ({ route, navigation }: any) => {
   const [loading, setLoading] = useState(true);
   const [activeOrders, setActiveOrders] = useState<any[]>([]);
   const [riderLocation, setRiderLocation] = useState<any>(null);
+  const [routeLine, setRouteLine] = useState<any>(null);
+  const [stores, setStores] = useState<any[]>([]);
 
   useEffect(() => {
     fetchActiveOrders();
@@ -45,29 +48,144 @@ const DeliveryMapScreen = ({ route, navigation }: any) => {
     return () => Geolocation.clearWatch(watchId);
   }, []);
 
+  useEffect(() => {
+    if (activeOrders.length > 0 && riderLocation) {
+      calculateAndFetchRoute();
+    }
+  }, [activeOrders, riderLocation]);
+
   const fetchActiveOrders = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Fetch both assigned active orders and the specific order requested (could be unassigned)
       const { data, error } = await supabase
         .from('orders')
         .select(`
           *,
-          stores:store_id (name, location, address),
-          addresses:delivery_address_id (receiver_name, location, address_line, city)
+          stores:store_id (id, name, location, address),
+          addresses:delivery_address_id (receiver_name, location, address_line, city),
+          order_items (
+            product_id,
+            products (
+              stores (id, name, location, address)
+            )
+          )
         `)
         .or(`rider_id.eq.${user.id},id.eq.${orderId}`)
         .in('status', ['pending_verification', 'accepted', 'preparing', 'ready', 'picked_up']);
 
       if (error) throw error;
-      setActiveOrders(data || []);
+      
+      const orders = data || [];
+      setActiveOrders(orders);
+
+      // Extract unique stores
+      const storeMap = new Map();
+      orders.forEach(order => {
+        // Direct store from store_id
+        if (order.stores) {
+          storeMap.set(order.stores.id, order.stores);
+        }
+        // Stores from items
+        order.order_items?.forEach((item: any) => {
+          const s = item.products?.stores;
+          if (s) {
+            storeMap.set(s.id, s);
+          }
+        });
+      });
+      setStores(Array.from(storeMap.values()));
+
     } catch (error: any) {
       console.error('Error fetching orders:', error.message);
     } finally {
       setLoading(false);
     }
+  };
+
+  const calculateAndFetchRoute = async () => {
+    if (!riderLocation || activeOrders.length === 0) return;
+
+    const selectedOrder = activeOrders.find(o => o.id === orderId) || activeOrders[0];
+    if (!selectedOrder) return;
+
+    const customerLoc = parseLocation(selectedOrder.addresses?.location);
+    
+    // Determine stops based on status
+    let stops: any[] = [];
+    if (selectedOrder.status === 'picked_up') {
+      // Direct to customer
+      if (customerLoc) stops = [customerLoc];
+    } else {
+      // To stores then customer
+      const orderStores = new Map();
+      if (selectedOrder.stores) orderStores.set(selectedOrder.stores.id, selectedOrder.stores);
+      selectedOrder.order_items?.forEach((item: any) => {
+        const s = item.products?.stores;
+        if (s) orderStores.set(s.id, s);
+      });
+      
+      stops = Array.from(orderStores.values())
+        .map(s => parseLocation(s.location))
+        .filter(l => !!l);
+      
+      if (customerLoc) stops.push(customerLoc);
+    }
+
+    if (stops.length === 0) return;
+
+    // Fetch route from Mappls
+    try {
+      const coordsString = `${riderLocation.longitude},${riderLocation.latitude};` + 
+        stops.map(s => `${s.longitude},${s.latitude}`).join(';');
+      
+      const url = `https://apis.mappls.com/advancedmaps/v1/${REST_API_KEY}/route_adv/driving/${coordsString}?alternatives=false&steps=true&overview=full&geometries=geojson`;
+      
+      const response = await fetch(url);
+      const result = await response.json();
+
+      if (result.routes && result.routes.length > 0) {
+        setRouteLine(result.routes[0].geometry);
+        
+        // Auto zoom
+        fitToStops(stops);
+      }
+    } catch (error) {
+      console.error('Error fetching route:', error);
+    }
+  };
+
+  const fitToStops = (stops: any[]) => {
+    if (!cameraRef.current || !riderLocation) return;
+    
+    const allCoords = [
+      [riderLocation.longitude, riderLocation.latitude],
+      ...stops.map(s => [s.longitude, s.latitude])
+    ];
+
+    // Simple bounding box calculation
+    let minLng = allCoords[0][0], maxLng = allCoords[0][0];
+    let minLat = allCoords[0][1], maxLat = allCoords[0][1];
+
+    allCoords.forEach(([lng, lat]) => {
+      minLng = Math.min(minLng, lng);
+      maxLng = Math.max(maxLng, lng);
+      minLat = Math.min(minLat, lat);
+      maxLat = Math.max(maxLat, lat);
+    });
+
+    cameraRef.current.setCamera({
+      bounds: {
+        ne: [maxLng, maxLat],
+        sw: [minLng, minLat],
+        paddingLeft: 50,
+        paddingRight: 50,
+        paddingTop: 50,
+        paddingBottom: 200, // Account for info card
+      },
+      duration: 1000,
+    });
   };
 
   const getCurrentRiderLocation = () => {
@@ -139,6 +257,21 @@ const DeliveryMapScreen = ({ route, navigation }: any) => {
           centerCoordinate={initialCenter}
         />
 
+        {/* Route Line */}
+        {routeLine && (
+          <ShapeSource id="routeSource" shape={routeLine}>
+            <LineLayer
+              id="routeLayer"
+              style={{
+                lineColor: Colors.primary,
+                lineWidth: 5,
+                lineJoin: 'round',
+                lineCap: 'round',
+              }}
+            />
+          </ShapeSource>
+        )}
+
         {/* Rider Marker */}
         {riderLocation && (
           <PointAnnotation
@@ -151,34 +284,37 @@ const DeliveryMapScreen = ({ route, navigation }: any) => {
           </PointAnnotation>
         )}
 
-        {/* Active Order Markers */}
-        {activeOrders.map((order) => {
-          const storeLoc = parseLocation(order.stores?.location);
-          const customerLoc = parseLocation(order.addresses?.location);
-          
+        {/* Store Markers (All stores involved) */}
+        {stores.map((store) => {
+          const loc = parseLocation(store.location);
+          if (!loc) return null;
           return (
-            <React.Fragment key={order.id}>
-              {storeLoc && (
-                <PointAnnotation
-                  id={`store-${order.id}`}
-                  coordinate={[storeLoc.longitude, storeLoc.latitude]}
-                >
-                  <View style={[styles.marker, { backgroundColor: Colors.warning }]}>
-                    <Icon name="store" size={20} color={Colors.dark} />
-                  </View>
-                </PointAnnotation>
-              )}
-              {customerLoc && (
-                <PointAnnotation
-                  id={`customer-${order.id}`}
-                  coordinate={[customerLoc.longitude, customerLoc.latitude]}
-                >
-                  <View style={[styles.marker, { backgroundColor: Colors.success }]}>
-                    <Icon name="account" size={20} color={Colors.white} />
-                  </View>
-                </PointAnnotation>
-              )}
-            </React.Fragment>
+            <PointAnnotation
+              key={`store-${store.id}`}
+              id={`store-${store.id}`}
+              coordinate={[loc.longitude, loc.latitude]}
+            >
+              <View style={[styles.marker, { backgroundColor: Colors.warning }]}>
+                <Icon name="store" size={20} color={Colors.dark} />
+              </View>
+            </PointAnnotation>
+          );
+        })}
+
+        {/* Customer Markers */}
+        {activeOrders.map((order) => {
+          const customerLoc = parseLocation(order.addresses?.location);
+          if (!customerLoc) return null;
+          return (
+            <PointAnnotation
+              key={`customer-${order.id}`}
+              id={`customer-${order.id}`}
+              coordinate={[customerLoc.longitude, customerLoc.latitude]}
+            >
+              <View style={[styles.marker, { backgroundColor: Colors.success }]}>
+                <Icon name="account" size={20} color={Colors.white} />
+              </View>
+            </PointAnnotation>
           );
         })}
       </MapView>
@@ -187,20 +323,40 @@ const DeliveryMapScreen = ({ route, navigation }: any) => {
       {selectedOrder && (
         <View style={[styles.infoCard, { paddingBottom: insets.bottom + Spacing.md }]}>
           <Text style={styles.selectedOrderTitle}>Focus: Order #{selectedOrder.order_number}</Text>
-          <View style={styles.infoRow}>
-            <Icon name="store" size={20} color={Colors.warning} />
-            <View style={styles.infoText}>
-              <Text style={styles.infoLabel}>Pickup</Text>
-              <Text style={styles.infoValue} numberOfLines={1}>{selectedOrder.stores?.name}</Text>
+          
+          {selectedOrder.status !== 'picked_up' ? (
+            <View style={styles.infoRow}>
+              <Icon name="store-marker" size={24} color={Colors.warning} />
+              <View style={styles.infoText}>
+                <Text style={styles.infoLabel}>Next Stops: {stores.length} Pickup(s)</Text>
+                <Text style={styles.infoValue} numberOfLines={1}>
+                  {stores.map(s => s.name).join(', ')}
+                </Text>
+              </View>
             </View>
-          </View>
-          <View style={styles.infoRow}>
-            <Icon name="account-location" size={20} color={Colors.success} />
-            <View style={styles.infoText}>
-              <Text style={styles.infoLabel}>Drop-off</Text>
-              <Text style={styles.infoValue} numberOfLines={1}>{selectedOrder.addresses?.address_line}</Text>
+          ) : (
+            <View style={styles.infoRow}>
+              <Icon name="account-location" size={24} color={Colors.success} />
+              <View style={styles.infoText}>
+                <Text style={styles.infoLabel}>Drop-off Location</Text>
+                <Text style={styles.infoValue} numberOfLines={1}>{selectedOrder.addresses?.address_line}</Text>
+              </View>
             </View>
-          </View>
+          )}
+
+          <TouchableOpacity 
+            style={styles.recenterBtn}
+            onPress={() => {
+              const selectedOrder = activeOrders.find(o => o.id === orderId) || activeOrders[0];
+              const customerLoc = parseLocation(selectedOrder?.addresses?.location);
+              const stops = stores.map(s => parseLocation(s.location)).filter(l => !!l);
+              if (customerLoc) stops.push(customerLoc);
+              fitToStops(stops);
+            }}
+          >
+            <Icon name="crosshairs-gps" size={20} color={Colors.primary} />
+            <Text style={styles.recenterText}>Fit View</Text>
+          </TouchableOpacity>
         </View>
       )}
     </View>
@@ -277,6 +433,20 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: 'bold',
     color: Colors.text,
+  },
+  recenterBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    backgroundColor: Colors.primaryLight,
+    borderRadius: BorderRadius.md,
+    marginTop: Spacing.sm,
+  },
+  recenterText: {
+    color: Colors.primary,
+    fontWeight: 'bold',
+    marginLeft: 8,
   },
 });
 

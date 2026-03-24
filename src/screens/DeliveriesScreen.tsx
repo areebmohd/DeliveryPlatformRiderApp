@@ -46,7 +46,12 @@ const DeliveriesScreen = ({ navigation }: any) => {
           *,
           stores:store_id (*),
           addresses:delivery_address_id (*),
-          order_items (*)
+          order_items (
+            *,
+            products (
+              stores (*)
+            )
+          )
         `);
 
       if (isRiderAvailable) {
@@ -163,23 +168,42 @@ const DeliveriesScreen = ({ navigation }: any) => {
 
         <View style={styles.divider} />
 
-        {/* Store Details */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Icon name="store" size={18} color={Colors.primary} />
-            <Text style={styles.sectionTitle}>Pickup from Store</Text>
-          </View>
-          <Text style={styles.storeName}>{order.stores?.name}</Text>
-          <Text style={styles.addressText}>{order.stores?.address}</Text>
-          
-          <View style={styles.productList}>
-            {order.order_items?.map((item: any) => (
-              <View key={item.id} style={styles.productItem}>
-                <Text style={styles.productName}>{item.product_name} x {item.quantity}</Text>
-                <Text style={styles.productPrice}>₹{item.product_price * item.quantity}</Text>
+        {/* Store Details (Grouped) */}
+        {(() => {
+          const groups: { [key: string]: { name: string, address: string, items: any[] } } = {};
+          order.order_items?.forEach((oi: any) => {
+            const store = oi.products?.stores || order.stores;
+            const sId = store?.id || 'unknown';
+            if (!groups[sId]) {
+              groups[sId] = {
+                name: store?.name || 'Unknown Store',
+                address: store?.address || 'N/A',
+                items: []
+              };
+            }
+            groups[sId].items.push(oi);
+          });
+
+          return Object.values(groups).map((group, gIdx) => (
+            <View key={gIdx} style={[styles.section, { marginTop: gIdx > 0 ? Spacing.md : 0 }]}>
+              <View style={styles.sectionHeader}>
+                <Icon name="store" size={18} color={Colors.primary} />
+                <Text style={styles.sectionTitle}>Pickup Stop #{gIdx + 1}</Text>
               </View>
-            ))}
-          </View>
+              <Text style={styles.storeName}>{group.name}</Text>
+              <Text style={styles.addressText}>{group.address}</Text>
+              
+              <View style={styles.productList}>
+                {group.items.map((item: any) => (
+                  <View key={item.id} style={styles.productItem}>
+                    <Text style={styles.productName}>{item.product_name} x {item.quantity}</Text>
+                    <Text style={styles.productPrice}>₹{item.product_price * item.quantity}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          ));
+        })()}
 
           {isAvailable && (
             <TouchableOpacity 
@@ -198,7 +222,6 @@ const DeliveriesScreen = ({ navigation }: any) => {
               <Text style={styles.pickupBtnText}>Mark Picked Up</Text>
             </TouchableOpacity>
           )}
-        </View>
 
         <View style={styles.divider} />
 
