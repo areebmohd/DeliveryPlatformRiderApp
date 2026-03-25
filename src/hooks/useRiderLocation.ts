@@ -33,8 +33,6 @@ export const useRiderLocation = (userId: string | undefined) => {
     };
 
     const startTracking = () => {
-      // Set rider as available when app opens/tracking starts
-      updateRiderStatus(true);
 
       watchId.current = Geolocation.watchPosition(
         async (position) => {
@@ -66,23 +64,12 @@ export const useRiderLocation = (userId: string | undefined) => {
       );
     };
 
-    const updateRiderStatus = async (available: boolean) => {
-      await supabase
-        .from('rider_profiles')
-        .update({ is_available: available })
-        .eq('profile_id', userId);
-    };
-
     requestPermission();
 
     return () => {
       if (watchId.current !== null) {
         Geolocation.clearWatch(watchId.current);
       }
-      // Optional: Set unavailable when app closes? 
-      // Usually better to keep available if background task is running, 
-      // but the user said "when he opens the app".
-      updateRiderStatus(false);
     };
   }, [userId, showAlert]);
 };
