@@ -30,17 +30,8 @@ const DeliveriesScreen = ({ navigation }: any) => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Check rider availability first
-      const { data: riderProfile } = await supabase
-        .from('rider_profiles')
-        .select('is_available')
-        .eq('profile_id', user.id)
-        .single();
-
-      const isRiderAvailable = riderProfile?.is_available || false;
-
-      // Base query
-      let query = supabase
+      // Check if rider has any active orders
+      const { data: activeOrders, error: activeError } = await supabase
         .from('orders')
         .select(`
           *,
@@ -52,21 +43,60 @@ const DeliveriesScreen = ({ navigation }: any) => {
               stores (*)
             )
           )
-        `);
+        `)
+        .eq('rider_id', user.id)
+        .not('status', 'in', '(delivered,cancelled)');
 
-      if (isRiderAvailable) {
-        // If available, show their orders OR unassigned orders
-        query = query.or(`rider_id.eq.${user.id},and(rider_id.is.null,status.in.(pending_verification,accepted,ready))`);
-      } else {
-        // If NOT available, ONLY show their currently assigned/active orders
-        query = query.eq('rider_id', user.id);
+      if (activeError) throw activeError;
+
+      let fetchedOrders: any[] = activeOrders || [];
+
+      // If no active orders, look for nearby unassigned orders
+      if (fetchedOrders.length === 0) {
+        // Get current location
+        const { data: riderProfile } = await supabase
+          .from('rider_profiles')
+          .select('current_location')
+          .eq('profile_id', user.id)
+          .single();
+
+        if (riderProfile?.current_location) {
+          const { data: nearbyOrders, error: nearbyError } = await supabase
+            .rpc('get_nearby_unassigned_orders', {
+              rider_location: riderProfile.current_location,
+              radius_km: 10
+            });
+
+          if (nearbyError) {
+            console.error('Error fetching nearby orders:', nearbyError);
+          } else if (nearbyOrders) {
+            fetchedOrders = [...fetchedOrders, ...nearbyOrders];
+          }
+        }
       }
 
-      const { data, error } = await query.order('created_at', { ascending: false });
-
-      if (error) throw error;
-
-      const fetchedOrders = data || [];
+      // Also fetch delivered/cancelled orders for history (optional, let's keep it simple)
+      const { data: historyOrders } = await supabase
+        .from('orders')
+        .select(`
+          *,
+          stores:store_id (*),
+          addresses:delivery_address_id (*),
+          order_items (
+            *,
+            products (
+              stores (*)
+            )
+          )
+        `)
+        .eq('rider_id', user.id)
+        .in('status', ['delivered', 'cancelled'])
+        .order('created_at', { ascending: false })
+        .limit(10);
+      
+      if (historyOrders) {
+        fetchedOrders = [...fetchedOrders, ...historyOrders];
+      }
       setOrders(fetchedOrders);
 
       // Group by date

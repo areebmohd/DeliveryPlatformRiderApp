@@ -18,7 +18,6 @@ const AccountOption = ({ icon, label, onPress }: { icon: string; label: string; 
 const AccountScreen = ({ navigation }: { navigation: any }) => {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<any>(null);
-  const [isAvailable, setIsAvailable] = useState(false);
   const [loading, setLoading] = useState(false);
   const { showAlert } = useCustomAlert();
 
@@ -40,43 +39,11 @@ const AccountScreen = ({ navigation }: { navigation: any }) => {
       if (error) throw error;
       setProfile(profileData);
 
-      // Fetch rider profile for availability
-      const { data: riderData } = await supabase
-        .from('rider_profiles')
-        .select('is_available')
-        .eq('profile_id', user.id)
-        .single();
-      
-      if (riderData) {
-        setIsAvailable(riderData.is_available);
-      }
+      // Profile data is fetched, rider profile availability is no longer manually toggled
     }
     setLoading(false);
   }
 
-  const toggleAvailability = async () => {
-    try {
-      setLoading(true);
-      const newStatus = !isAvailable;
-      
-      const { error } = await supabase
-        .from('rider_profiles')
-        .update({ is_available: newStatus })
-        .eq('profile_id', user?.id);
-
-      if (error) throw error;
-      
-      setIsAvailable(newStatus);
-      showAlert(
-        'Status Updated', 
-        `You are now ${newStatus ? 'online and ready for deliveries' : 'offline'}`
-      );
-    } catch (error: any) {
-      showAlert('Error', error.message);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleLogout = async () => {
     showAlert(
@@ -110,23 +77,6 @@ const AccountScreen = ({ navigation }: { navigation: any }) => {
         <Text style={styles.title}>{profile?.full_name || 'Rider'}</Text>
         <Text style={styles.subtitle}>{profile?.phone || 'No phone added'}</Text>
         
-        <TouchableOpacity 
-          style={[
-            styles.availabilityBtn, 
-            isAvailable ? styles.availableOn : styles.availableOff
-          ]}
-          onPress={toggleAvailability}
-          disabled={loading}
-        >
-          <Icon 
-            name={isAvailable ? "check-circle" : "power"} 
-            size={18} 
-            color="#fff" 
-          />
-          <Text style={styles.availabilityText}>
-            {isAvailable ? 'AVAILABLE' : 'GO ONLINE'}
-          </Text>
-        </TouchableOpacity>
       </View>
 
       <View style={styles.optionsSection}>
@@ -165,8 +115,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#f8f9fa',
   },
   header: {
-    paddingTop: 20,
-    paddingBottom: 20,
+    paddingTop: 30,
+    paddingBottom: 10,
     alignItems: 'center',
     backgroundColor: '#f8f9fa',
   },
@@ -240,32 +190,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '500',
     color: '#343a40',
-  },
-  availabilityBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 25,
-    marginTop: 15,
-    gap: 8,
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-  },
-  availableOn: {
-    backgroundColor: '#28a745',
-  },
-  availableOff: {
-    backgroundColor: '#6c757d',
-  },
-  availabilityText: {
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 14,
-    letterSpacing: 1,
   },
   footer: {
     marginTop: 40,
