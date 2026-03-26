@@ -50,29 +50,18 @@ const DeliveriesScreen = ({ navigation }: any) => {
       if (activeError) throw activeError;
 
       let fetchedOrders: any[] = activeOrders || [];
+      
+      // Look for unassigned orders (all riders can see them now)
+      const { data: availableOrders, error: availableError } = await supabase
+        .rpc('get_nearby_unassigned_orders');
 
-      // If no active orders, look for nearby unassigned orders
-      if (fetchedOrders.length === 0) {
-        // Get current location
-        const { data: riderProfile } = await supabase
-          .from('rider_profiles')
-          .select('current_location')
-          .eq('profile_id', user.id)
-          .single();
-
-        if (riderProfile?.current_location) {
-          const { data: nearbyOrders, error: nearbyError } = await supabase
-            .rpc('get_nearby_unassigned_orders', {
-              rider_location: riderProfile.current_location,
-              radius_km: 10
-            });
-
-          if (nearbyError) {
-            console.error('Error fetching nearby orders:', nearbyError);
-          } else if (nearbyOrders) {
-            fetchedOrders = [...fetchedOrders, ...nearbyOrders];
-          }
-        }
+      if (availableError) {
+        console.error('Error fetching available orders:', availableError);
+      } else if (availableOrders) {
+        // Avoid duplicates if any, though active orders should have rider_id set
+        const availableIds = new Set(fetchedOrders.map(o => o.id));
+        const filteredAvailable = availableOrders.filter((o: any) => !availableIds.has(o.id));
+        fetchedOrders = [...fetchedOrders, ...filteredAvailable];
       }
 
       // Also fetch delivered/cancelled orders for history (optional, let's keep it simple)
@@ -214,6 +203,16 @@ const DeliveriesScreen = ({ navigation }: any) => {
             groups[sId].items.push(oi);
           });
 
+          // Fallback if no items but store exists
+          if (Object.keys(groups).length === 0 && order.stores) {
+            const s = order.stores;
+            groups[s.id || 'main'] = {
+              name: s.name || 'Unknown Store',
+              address: s.address || 'N/A',
+              items: []
+            };
+          }
+
           return Object.values(groups).map((group, gIdx) => (
             <View key={gIdx} style={[styles.section, { marginTop: gIdx > 0 ? Spacing.md : 0 }]}>
               <View style={styles.sectionHeader}>
@@ -223,14 +222,16 @@ const DeliveriesScreen = ({ navigation }: any) => {
               <Text style={styles.storeName}>{group.name}</Text>
               <Text style={styles.addressText}>{group.address}</Text>
               
-              <View style={styles.productList}>
-                {group.items.map((item: any) => (
-                  <View key={item.id} style={styles.productItem}>
-                    <Text style={styles.productName}>{item.product_name} x {item.quantity}</Text>
-                    <Text style={styles.productPrice}>₹{item.product_price * item.quantity}</Text>
-                  </View>
-                ))}
-              </View>
+              {group.items.length > 0 && (
+                <View style={styles.productList}>
+                  {group.items.map((item: any) => (
+                    <View key={item.id} style={styles.productItem}>
+                      <Text style={styles.productName}>{item.product_name} x {item.quantity}</Text>
+                      <Text style={styles.productPrice}>₹{item.product_price * item.quantity}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
             </View>
           ));
         })()}
