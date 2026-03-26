@@ -27,6 +27,8 @@ const ProfileSetupScreen = ({ navigation, route }: Props) => {
   const [sectorArea, setSectorArea] = useState('');
   const [city, setCity] = useState('');
   const [state, setState] = useState('');
+  const [vehicleType, setVehicleType] = useState('');
+  const [vehicleNumber, setVehicleNumber] = useState('');
 
   useEffect(() => {
     fetchCurrentProfile();
@@ -47,6 +49,17 @@ const ProfileSetupScreen = ({ navigation, route }: Props) => {
       setFullName(profile.full_name || '');
       setPhone(profile.phone || '');
       setUpiId(profile.upi_id || '');
+    }
+
+    const { data: riderProfile } = await supabase
+      .from('rider_profiles')
+      .select('*')
+      .eq('profile_id', user.id)
+      .single();
+
+    if (riderProfile) {
+      setVehicleType(riderProfile.vehicle_type || '');
+      setVehicleNumber(riderProfile.vehicle_number || '');
     }
 
     const { data: address } = await supabase
@@ -136,10 +149,17 @@ const ProfileSetupScreen = ({ navigation, route }: Props) => {
       .eq('profile_id', user.id)
       .limit(1);
 
+    const riderProfileData = {
+      profile_id: user.id,
+      upi_id: trimmedUpiId,
+      vehicle_type: vehicleType.trim(),
+      vehicle_number: vehicleNumber.trim(),
+    };
+
     if (!existingRiderProfile || existingRiderProfile.length === 0) {
-      await supabase.from('rider_profiles').insert([{ profile_id: user.id, upi_id: trimmedUpiId }]);
+      await supabase.from('rider_profiles').insert([riderProfileData]);
     } else {
-      await supabase.from('rider_profiles').update({ upi_id: trimmedUpiId }).eq('profile_id', user.id);
+      await supabase.from('rider_profiles').update(riderProfileData).eq('profile_id', user.id);
     }
 
     setLoading(false);
@@ -226,6 +246,23 @@ const ProfileSetupScreen = ({ navigation, route }: Props) => {
           placeholderTextColor="#999"
           value={state}
           onChangeText={setState}
+        />
+
+        <Text style={[styles.sectionTitle, { marginTop: 20 }]}>Vehicle Details</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="Vehicle Type (e.g. Honda Activa)"
+          placeholderTextColor="#999"
+          value={vehicleType}
+          onChangeText={setVehicleType}
+        />
+        <TextInput
+          style={styles.input}
+          placeholder="Vehicle Number (e.g. DL 1S AB 1234)"
+          placeholderTextColor="#999"
+          value={vehicleNumber}
+          onChangeText={setVehicleNumber}
+          autoCapitalize="characters"
         />
 
         <TouchableOpacity style={styles.button} onPress={handleSave} disabled={loading}>

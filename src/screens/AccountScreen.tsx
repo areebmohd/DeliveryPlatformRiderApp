@@ -33,7 +33,7 @@ const AccountScreen = ({ navigation }: { navigation: any }) => {
     if (user) {
       const { data: profileData, error } = await supabase
         .from('profiles')
-        .select('*')
+        .select('*, rider_profiles(*)')
         .eq('id', user.id)
         .single();
       if (error) throw error;
@@ -77,6 +77,14 @@ const AccountScreen = ({ navigation }: { navigation: any }) => {
         <Text style={styles.title}>{profile?.full_name || 'Rider'}</Text>
         <Text style={styles.subtitle}>{profile?.phone || 'No phone added'}</Text>
         
+        {profile?.rider_profiles?.[0]?.vehicle_type && profile?.rider_profiles?.[0]?.vehicle_number && (
+          <View style={styles.vehicleInfo}>
+            <Icon name="bicycle" size={16} color="#007bff" />
+            <Text style={styles.vehicleText}>
+              {profile.rider_profiles[0].vehicle_type} • {profile.rider_profiles[0].vehicle_number}
+            </Text>
+          </View>
+        )}
       </View>
 
       <View style={styles.optionsSection}>
@@ -163,6 +171,21 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#6c757d',
     marginTop: 4,
+  },
+  vehicleInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#e7f1ff',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    marginTop: 10,
+  },
+  vehicleText: {
+    fontSize: 14,
+    color: '#007bff',
+    fontWeight: '600',
+    marginLeft: 6,
   },
   optionsSection: {
     marginTop: 20,
