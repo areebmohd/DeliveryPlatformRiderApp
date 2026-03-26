@@ -26,7 +26,6 @@ const DeliveryMapScreen = ({ route, navigation }: any) => {
   const [loading, setLoading] = useState(true);
   const [activeOrders, setActiveOrders] = useState<any[]>([]);
   const [riderLocation, setRiderLocation] = useState<any>(null);
-  const [routeLine, setRouteLine] = useState<any>(null);
   const [stores, setStores] = useState<any[]>([]);
 
   useEffect(() => {
@@ -104,6 +103,9 @@ const DeliveryMapScreen = ({ route, navigation }: any) => {
     }
   };
 
+  const [nextRouteLine, setNextRouteLine] = useState<any>(null);
+  const [remainingRouteLine, setRemainingRouteLine] = useState<any>(null);
+
   const calculateAndFetchRoute = async () => {
     if (!riderLocation || activeOrders.length === 0) return;
 
@@ -123,7 +125,14 @@ const DeliveryMapScreen = ({ route, navigation }: any) => {
       if (selectedOrder.stores) orderStores.set(selectedOrder.stores.id, selectedOrder.stores);
       selectedOrder.order_items?.forEach((item: any) => {
         const s = item.products?.stores;
-        if (s) orderStores.set(s.id, s);
+        if (s) {
+          // Only add store if any item from this store is NOT picked up
+          const storeItems = selectedOrder.order_items.filter((oi: any) => (oi.products?.stores?.id || selectedOrder.stores?.id) === s.id);
+          const allPicked = storeItems.every((oi: any) => oi.is_picked_up);
+          if (!allPicked) {
+            orderStores.set(s.id, s);
+          }
+        }
       });
       
       stops = Array.from(orderStores.values())
@@ -133,24 +142,40 @@ const DeliveryMapScreen = ({ route, navigation }: any) => {
       if (customerLoc) stops.push(customerLoc);
     }
 
-    if (stops.length === 0) return;
+    if (stops.length === 0) {
+      setNextRouteLine(null);
+      setRemainingRouteLine(null);
+      return;
+    }
 
-    // Fetch route from Mappls
+    // Fetch routes from Mappls
     try {
-      const coordsString = `${riderLocation.longitude},${riderLocation.latitude};` + 
-        stops.map(s => `${s.longitude},${s.latitude}`).join(';');
+      // 1. Next Segment (Rider to Next Stop) - GREEN
+      const nextCoords = `${riderLocation.longitude},${riderLocation.latitude};${stops[0].longitude},${stops[0].latitude}`;
+      const nextUrl = `https://apis.mappls.com/advancedmaps/v1/${REST_API_KEY}/route_adv/driving/${nextCoords}?alternatives=false&steps=false&overview=full&geometries=geojson`;
       
-      const url = `https://apis.mappls.com/advancedmaps/v1/${REST_API_KEY}/route_adv/driving/${coordsString}?alternatives=false&steps=true&overview=full&geometries=geojson`;
-      
-      const response = await fetch(url);
-      const result = await response.json();
-
-      if (result.routes && result.routes.length > 0) {
-        setRouteLine(result.routes[0].geometry);
-        
-        // Auto zoom
-        fitToStops(stops);
+      const nextResponse = await fetch(nextUrl);
+      const nextResult = await nextResponse.json();
+      if (nextResult.routes && nextResult.routes.length > 0) {
+        setNextRouteLine(nextResult.routes[0].geometry);
       }
+
+      // 2. Remaining Segments (Next Stop to End) - BLUE
+      if (stops.length > 1) {
+        const remainingCoords = stops.map(s => `${s.longitude},${s.latitude}`).join(';');
+        const remainingUrl = `https://apis.mappls.com/advancedmaps/v1/${REST_API_KEY}/route_adv/driving/${remainingCoords}?alternatives=false&steps=false&overview=full&geometries=geojson`;
+        
+        const remResponse = await fetch(remainingUrl);
+        const remResult = await remResponse.json();
+        if (remResult.routes && remResult.routes.length > 0) {
+          setRemainingRouteLine(remResult.routes[0].geometry);
+        }
+      } else {
+        setRemainingRouteLine(null);
+      }
+      
+      // Auto zoom
+      fitToStops(stops);
     } catch (error) {
       console.error('Error fetching route:', error);
     }
@@ -257,16 +282,32 @@ const DeliveryMapScreen = ({ route, navigation }: any) => {
           centerCoordinate={initialCenter}
         />
 
-        {/* Route Line */}
-        {routeLine && (
-          <ShapeSource id="routeSource" shape={routeLine}>
+        {/* Next Segment - GREEN */}
+        {nextRouteLine && (
+          <ShapeSource id="nextRouteSource" shape={nextRouteLine}>
             <LineLayer
-              id="routeLayer"
+              id="nextRouteLayer"
+              style={{
+                lineColor: Colors.success,
+                lineWidth: 5,
+                lineJoin: 'round',
+                lineCap: 'round',
+              }}
+            />
+          </ShapeSource>
+        )}
+
+        {/* Remaining Segments - BLUE */}
+        {remainingRouteLine && (
+          <ShapeSource id="remainingRouteSource" shape={remainingRouteLine}>
+            <LineLayer
+              id="remainingRouteLayer"
               style={{
                 lineColor: Colors.primary,
                 lineWidth: 5,
                 lineJoin: 'round',
                 lineCap: 'round',
+                lineDasharray: [1, 2], // Optional: make it dashed to distinguish further
               }}
             />
           </ShapeSource>
@@ -336,7 +377,7 @@ const DeliveryMapScreen = ({ route, navigation }: any) => {
             </View>
           ) : (
             <View style={styles.infoRow}>
-              <Icon name="account-location" size={24} color={Colors.success} />
+              <Icon name="flag-checkered" size={24} color={Colors.success} />
               <View style={styles.infoText}>
                 <Text style={styles.infoLabel}>Drop-off Location</Text>
                 <Text style={styles.infoValue} numberOfLines={1}>{selectedOrder.addresses?.address_line}</Text>
