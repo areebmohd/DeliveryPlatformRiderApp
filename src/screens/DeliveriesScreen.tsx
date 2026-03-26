@@ -39,8 +39,9 @@ const DeliveriesScreen = ({ navigation }: any) => {
           addresses:delivery_address_id (*),
           order_items (
             *,
-            products (
-              stores (*)
+            is_picked_up,
+            products:product_id (
+              stores:store_id (*)
             )
           )
         `)
@@ -73,8 +74,9 @@ const DeliveriesScreen = ({ navigation }: any) => {
           addresses:delivery_address_id (*),
           order_items (
             *,
-            products (
-              stores (*)
+            is_picked_up,
+            products:product_id (
+              stores:store_id (*)
             )
           )
         `)
@@ -189,12 +191,13 @@ const DeliveriesScreen = ({ navigation }: any) => {
 
         {/* Store Details (Grouped) */}
         {(() => {
-          const groups: { [key: string]: { name: string, address: string, items: any[] } } = {};
+          const groups: { [key: string]: { id: string, name: string, address: string, items: any[] } } = {};
           order.order_items?.forEach((oi: any) => {
-            const store = oi.products?.stores || order.stores;
+            const store = oi.products?.stores || (Array.isArray(oi.products) ? oi.products[0]?.stores : null) || order.stores;
             const sId = store?.id || 'unknown';
             if (!groups[sId]) {
               groups[sId] = {
+                id: sId,
                 name: store?.name || 'Unknown Store',
                 address: store?.address || 'N/A',
                 items: []
@@ -206,7 +209,9 @@ const DeliveriesScreen = ({ navigation }: any) => {
           // Fallback if no items but store exists
           if (Object.keys(groups).length === 0 && order.stores) {
             const s = order.stores;
-            groups[s.id || 'main'] = {
+            const sId = s.id || 'main';
+            groups[sId] = {
+              id: sId,
               name: s.name || 'Unknown Store',
               address: s.address || 'N/A',
               items: []
@@ -227,10 +232,39 @@ const DeliveriesScreen = ({ navigation }: any) => {
                   {group.items.map((item: any) => (
                     <View key={item.id} style={styles.productItem}>
                       <Text style={styles.productName}>{item.product_name} x {item.quantity}</Text>
-                      <Text style={styles.productPrice}>₹{item.product_price * item.quantity}</Text>
+                      <View style={styles.productInfoRow}>
+                        {item.is_picked_up && (
+                          <Icon name="check-circle" size={14} color={Colors.success} style={{ marginRight: 4 }} />
+                        )}
+                        <Text style={styles.productPrice}>₹{item.product_price * item.quantity}</Text>
+                      </View>
                     </View>
                   ))}
                 </View>
+              )}
+
+              {/* Store-level Pickup Button */}
+              {order.rider_id && !isHistory && order.status !== 'delivered' && order.status !== 'cancelled' && (
+                (() => {
+                  const allStoreItemsPicked = group.items.length > 0 && group.items.every((item: any) => item.is_picked_up);
+                  if (allStoreItemsPicked) {
+                    return (
+                      <View style={styles.pickedUpBadge}>
+                        <Icon name="check-decagram" size={16} color={Colors.success} />
+                        <Text style={styles.pickedUpBadgeText}>PICKED UP FROM {group.name.toUpperCase()}</Text>
+                      </View>
+                    );
+                  }
+                  return (
+                    <TouchableOpacity 
+                      style={styles.storePickupBtn}
+                      onPress={() => handleStorePickUp(order.id, group.id || Object.keys(groups).find(key => groups[key] === group))}
+                    >
+                      <Icon name="package-variant-closed" size={16} color={Colors.dark} />
+                      <Text style={styles.storePickupBtnText}>Mark Picked Up from {group.name}</Text>
+                    </TouchableOpacity>
+                  );
+                })()
               )}
             </View>
           ));
@@ -245,14 +279,6 @@ const DeliveriesScreen = ({ navigation }: any) => {
             </TouchableOpacity>
           )}
 
-          {order.rider_id && !isHistory && order.status !== 'picked_up' && (
-            <TouchableOpacity 
-              style={styles.pickupBtn}
-              onPress={() => handlePickUp(order.id)}
-            >
-              <Text style={styles.pickupBtnText}>Mark Picked Up</Text>
-            </TouchableOpacity>
-          )}
 
         <View style={styles.divider} />
 
@@ -350,9 +376,41 @@ const DeliveriesScreen = ({ navigation }: any) => {
     }
   };
 
+  const handleStorePickUp = async (orderId: string, storeId: string | undefined) => {
+    if (!storeId) {
+      showAlert('Error', 'Missing store information.');
+      return;
+    }
+    try {
+      setLoading(true);
+      
+      const { error } = await supabase.rpc('mark_store_items_picked_up', {
+        input_order_id: orderId,
+        input_store_id: storeId
+      });
+      
+      if (error) throw error;
+
+      showAlert('Success', 'Store marked as picked up!');
+      fetchOrders();
+    } catch (error: any) {
+      showAlert('Error', error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handlePickUp = async (orderId: string) => {
     try {
       setLoading(true);
+      // Mark all items as picked up first
+      const { error: itemsError } = await supabase
+        .from('order_items')
+        .update({ is_picked_up: true })
+        .eq('order_id', orderId);
+      
+      if (itemsError) throw itemsError;
+
       const { error } = await supabase
         .from('orders')
         .update({ status: 'picked_up' })
@@ -708,6 +766,42 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '900',
     color: Colors.dark,
+  },
+  productInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  storePickupBtn: {
+    backgroundColor: Colors.warning,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: BorderRadius.md,
+    marginTop: Spacing.md,
+    gap: 8,
+  },
+  storePickupBtnText: {
+    color: Colors.dark,
+    fontWeight: 'bold',
+    fontSize: 14,
+  },
+  pickedUpBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#f0fff4',
+    paddingVertical: 10,
+    borderRadius: BorderRadius.md,
+    marginTop: Spacing.md,
+    borderWidth: 1,
+    borderColor: '#c6f6d5',
+    gap: 8,
+  },
+  pickedUpBadgeText: {
+    color: Colors.success,
+    fontWeight: 'bold',
+    fontSize: 12,
   },
 });
 
