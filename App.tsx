@@ -65,16 +65,46 @@ function App() {
 
       console.log('Profile found:', profile);
 
-      // A profile is complete if they have name, phone, and upi_id
-      // We also check if the role is 'rider' to ensure they are using the right account
+      // Check basic profile fields
       const hasName = !!profile?.full_name && profile.full_name.trim().length > 0;
       const hasPhone = !!profile?.phone && profile.phone.trim().length > 0;
       const hasUpi = !!profile?.upi_id && profile.upi_id.trim().length > 0;
       const isRider = profile?.role === 'rider';
 
-      const isComplete = hasName && hasPhone && hasUpi && isRider;
-      
-      console.log('Profile Status:', { hasName, hasPhone, hasUpi, isRider, isComplete });
+      // Check address fields
+      const { data: address } = await supabase
+        .from('addresses')
+        .select('address_line, city, state, pincode')
+        .eq('user_id', userId)
+        .eq('is_default', true)
+        .maybeSingle();
+
+      const hasAddress = !!address?.address_line && address.address_line.trim().length > 0;
+      const hasCity = !!address?.city && address.city.trim().length > 0;
+      const hasState = !!address?.state && address.state.trim().length > 0;
+      const hasPincode = !!address?.pincode && address.pincode.trim().length > 0;
+
+      // Check rider profile fields
+      const { data: riderProfile } = await supabase
+        .from('rider_profiles')
+        .select('vehicle_type, vehicle_number')
+        .eq('profile_id', userId)
+        .maybeSingle();
+
+      const hasVehicleType = !!riderProfile?.vehicle_type && riderProfile.vehicle_type.trim().length > 0;
+      const hasVehicleNumber = !!riderProfile?.vehicle_number && riderProfile.vehicle_number.trim().length > 0;
+
+      const isComplete =
+        hasName && hasPhone && hasUpi && isRider &&
+        hasAddress && hasCity && hasState && hasPincode &&
+        hasVehicleType && hasVehicleNumber;
+
+      console.log('Profile Status:', {
+        hasName, hasPhone, hasUpi, isRider,
+        hasAddress, hasCity, hasState, hasPincode,
+        hasVehicleType, hasVehicleNumber,
+        isComplete,
+      });
       setProfileComplete(isComplete);
     } catch (err) {
       console.error('Unexpected error in checkProfile:', err);
