@@ -8,11 +8,13 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  StatusBar,
 } from 'react-native';
 import { supabase } from '../lib/supabaseClient';
 import { useCustomAlert } from '../context/CustomAlertContext';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AuthStackParamList } from '../navigation/types';
+import { Colors, BorderRadius, UI, Typography } from '../theme/colors';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'Login'>;
 
@@ -23,7 +25,6 @@ const LoginScreen = ({ navigation }: Props) => {
   const { showAlert } = useCustomAlert();
 
   async function signInWithEmail() {
-    console.log('Attempting login for:', email);
     if (!email || !password) {
       showAlert('Error', 'Please enter both email and password');
       return;
@@ -36,11 +37,8 @@ const LoginScreen = ({ navigation }: Props) => {
         password: password,
       });
 
-      console.log('Login result:', { data, error });
-
       if (error) showAlert('Login failed', error.message);
     } catch (err) {
-      console.log('Login exception:', err);
       showAlert('Login Error', 'An unexpected error occurred');
     }
     setLoading(false);
@@ -51,6 +49,7 @@ const LoginScreen = ({ navigation }: Props) => {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.container}
     >
+      <StatusBar backgroundColor={Colors.background} barStyle="dark-content" />
       <View style={styles.inner}>
         <View style={styles.header}>
           <Text style={styles.logoText}>Rider App</Text>
@@ -90,7 +89,7 @@ const LoginScreen = ({ navigation }: Props) => {
             disabled={loading}
           >
             {loading ? (
-              <ActivityIndicator color="#fff" />
+              <ActivityIndicator color={Colors.white} />
             ) : (
               <Text style={styles.buttonText}>Login</Text>
             )}
@@ -101,7 +100,8 @@ const LoginScreen = ({ navigation }: Props) => {
             onPress={() => navigation.navigate('SignUp')}
           >
             <Text style={styles.linkText}>
-              Don't have an account? <Text style={styles.linkHighlight}>Sign Up</Text>
+              Don't have an account?{' '}
+              <Text style={styles.linkHighlight}>Sign Up</Text>
             </Text>
           </TouchableOpacity>
 
@@ -120,11 +120,11 @@ const LoginScreen = ({ navigation }: Props) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: Colors.background,
   },
   inner: {
     flex: 1,
-    padding: 24,
+    padding: UI.screenPadding,
     justifyContent: 'center',
   },
   header: {
@@ -133,12 +133,12 @@ const styles = StyleSheet.create({
   logoText: {
     fontSize: 32,
     fontWeight: '800',
-    color: '#007bff',
+    color: Colors.primary,
     marginBottom: 8,
   },
   subtitle: {
     fontSize: 16,
-    color: '#6c757d',
+    color: Colors.textSecondary,
   },
   form: {
     width: '100%',
@@ -147,38 +147,36 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#212529',
+    ...Typography.label,
+    color: Colors.text,
     marginBottom: 8,
   },
   input: {
-    height: 52,
-    backgroundColor: '#f8f9fa',
-    borderRadius: 12,
+    height: UI.inputHeight,
+    backgroundColor: Colors.white,
+    borderRadius: BorderRadius.input,
     paddingHorizontal: 16,
     fontSize: 16,
-    color: '#212529',
+    color: Colors.text,
     borderWidth: 1,
-    borderColor: '#dee2e6',
+    borderColor: Colors.border,
   },
   button: {
-    height: 52,
-    backgroundColor: '#007bff',
-    borderRadius: 12,
+    height: UI.buttonHeight,
+    backgroundColor: Colors.primary,
+    borderRadius: BorderRadius.button,
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 10,
-    shadowColor: '#007bff',
+    shadowColor: Colors.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 4,
   },
   buttonText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '700',
+    color: Colors.white,
+    ...Typography.button,
   },
   linkButton: {
     marginTop: 20,
@@ -186,10 +184,10 @@ const styles = StyleSheet.create({
   },
   linkText: {
     fontSize: 14,
-    color: '#6c757d',
+    color: Colors.textSecondary,
   },
   linkHighlight: {
-    color: '#007bff',
+    color: Colors.primary,
     fontWeight: '700',
   },
   forgotBtn: {
@@ -198,7 +196,7 @@ const styles = StyleSheet.create({
   },
   forgotBtnText: {
     fontSize: 14,
-    color: '#007bff',
+    color: Colors.primary,
     fontWeight: '600',
   },
 });

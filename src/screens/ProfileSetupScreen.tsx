@@ -16,6 +16,7 @@ import { supabase } from '../lib/supabaseClient';
 import { useCustomAlert } from '../context/CustomAlertContext';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AuthStackParamList } from '../navigation/types';
+import { Colors, BorderRadius, UI, Typography } from '../theme/colors';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'ProfileSetup'>;
 
@@ -338,48 +339,53 @@ const ProfileSetupScreen = ({ navigation, route }: Props) => {
 };
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#f8f9fa' },
-  container: { flex: 1, backgroundColor: '#f8f9fa' },
-  scrollContent: { padding: 24, paddingBottom: 40 },
+  safeArea: { flex: 1, backgroundColor: Colors.background },
+  container: { flex: 1, backgroundColor: Colors.background },
+  scrollContent: { padding: UI.screenPadding, paddingBottom: 40 },
   header: { marginBottom: 28 },
   heading: {
     fontSize: 26,
     fontWeight: '800',
-    color: '#007bff',
+    color: Colors.primary,
   },
   subheading: {
     fontSize: 13,
-    color: '#dc3545',
+    color: Colors.danger,
     fontWeight: '500',
   },
   form: { width: '100%' },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '700',
-    color: '#007bff',
-    marginBottom: 15,
+    color: Colors.primary,
+    marginBottom: 14,
   },
   input: {
-    height: 52,
-    backgroundColor: '#f8f9fa',
-    borderRadius: 12,
+    height: UI.inputHeight,
+    backgroundColor: Colors.white,
+    borderRadius: BorderRadius.input,
     paddingHorizontal: 16,
-    fontSize: 16,
-    color: '#212529',
+    fontSize: 15,
+    color: Colors.text,
     borderWidth: 1,
-    borderColor: '#dee2e6',
-    marginBottom: 15,
+    borderColor: Colors.border,
+    marginBottom: 14,
   },
   row: { flexDirection: 'row', marginBottom: 0 },
   button: {
-    height: 56,
-    backgroundColor: '#007bff',
-    borderRadius: 12,
+    height: UI.buttonHeight,
+    backgroundColor: Colors.primary,
+    borderRadius: BorderRadius.button,
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 20,
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
-  buttonText: { color: '#fff', fontSize: 18, fontWeight: '700' },
+  buttonText: { color: Colors.white, ...Typography.button },
 });
 
 export default ProfileSetupScreen;

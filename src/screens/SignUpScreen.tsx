@@ -9,11 +9,13 @@ import {
   Platform,
   ActivityIndicator,
   ScrollView,
+  StatusBar,
 } from 'react-native';
 import { supabase } from '../lib/supabaseClient';
 import { useCustomAlert } from '../context/CustomAlertContext';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AuthStackParamList } from '../navigation/types';
+import { Colors, BorderRadius, UI, Typography } from '../theme/colors';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'SignUp'>;
 
@@ -88,12 +90,8 @@ const SignUpScreen = ({ navigation }: Props) => {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.container}
     >
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        <View style={styles.header}>
-          <Text style={styles.logoText}>Rider App</Text>
-          <Text style={styles.subtitle}>Create an account to start delivering</Text>
-        </View>
-
+      <StatusBar backgroundColor={Colors.background} barStyle="dark-content" />
+      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
         <View style={styles.form}>
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Email Address</Text>
@@ -140,7 +138,7 @@ const SignUpScreen = ({ navigation }: Props) => {
             disabled={loading}
           >
             {loading ? (
-              <ActivityIndicator color="#fff" />
+              <ActivityIndicator color={Colors.white} />
             ) : (
               <Text style={styles.buttonText}>Sign Up</Text>
             )}
@@ -151,7 +149,8 @@ const SignUpScreen = ({ navigation }: Props) => {
             onPress={() => navigation.navigate('Login')}
           >
             <Text style={styles.linkText}>
-              Already have an account? <Text style={styles.linkHighlight}>Login</Text>
+              Already have an account?{' '}
+              <Text style={styles.linkHighlight}>Login</Text>
             </Text>
           </TouchableOpacity>
         </View>
@@ -163,25 +162,12 @@ const SignUpScreen = ({ navigation }: Props) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: Colors.background,
   },
   scrollContent: {
-    padding: 24,
+    padding: UI.screenPadding,
+    paddingTop: 32,
     flexGrow: 1,
-  },
-  header: {
-    marginBottom: 40,
-    display: 'none',
-  },
-  logoText: {
-    fontSize: 32,
-    fontWeight: '800',
-    color: '#007bff',
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#6c757d',
   },
   form: {
     width: '100%',
@@ -190,38 +176,36 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#212529',
+    ...Typography.label,
+    color: Colors.text,
     marginBottom: 8,
   },
   input: {
-    height: 52,
-    backgroundColor: '#f8f9fa',
-    borderRadius: 12,
+    height: UI.inputHeight,
+    backgroundColor: Colors.white,
+    borderRadius: BorderRadius.input,
     paddingHorizontal: 16,
     fontSize: 16,
-    color: '#212529',
+    color: Colors.text,
     borderWidth: 1,
-    borderColor: '#dee2e6',
+    borderColor: Colors.border,
   },
   button: {
-    height: 52,
-    backgroundColor: '#007bff',
-    borderRadius: 12,
+    height: UI.buttonHeight,
+    backgroundColor: Colors.primary,
+    borderRadius: BorderRadius.button,
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 10,
-    shadowColor: '#007bff',
+    shadowColor: Colors.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 4,
   },
   buttonText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '700',
+    color: Colors.white,
+    ...Typography.button,
   },
   linkButton: {
     marginTop: 20,
@@ -229,10 +213,10 @@ const styles = StyleSheet.create({
   },
   linkText: {
     fontSize: 14,
-    color: '#6c757d',
+    color: Colors.textSecondary,
   },
   linkHighlight: {
-    color: '#007bff',
+    color: Colors.primary,
     fontWeight: '700',
   },
 });

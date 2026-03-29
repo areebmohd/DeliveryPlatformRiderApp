@@ -9,11 +9,12 @@ import {
   Platform,
   ActivityIndicator,
   ScrollView,
+  StatusBar,
 } from 'react-native';
 import { supabase } from '../lib/supabaseClient';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AuthStackParamList } from '../navigation/types';
-import { Colors, Spacing, BorderRadius } from '../theme/colors';
+import { Colors, BorderRadius, UI, Typography } from '../theme/colors';
 import { useCustomAlert } from '../context/CustomAlertContext';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'VerifyResetOTP'>;
@@ -39,7 +40,7 @@ const VerifyResetOTPScreen = ({ navigation, route }: Props) => {
       });
 
       if (error) throw error;
-      
+
       // Verification successful, navigate to update password
       navigation.navigate('ResetPassword', { email });
     } catch (error: any) {
@@ -67,7 +68,8 @@ const VerifyResetOTPScreen = ({ navigation, route }: Props) => {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.container}
     >
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <StatusBar backgroundColor={Colors.background} barStyle="dark-content" />
+      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
         <View style={styles.header}>
           <Text style={styles.title}>Verify Code</Text>
           <Text style={styles.subtitle}>
@@ -79,7 +81,7 @@ const VerifyResetOTPScreen = ({ navigation, route }: Props) => {
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Verification Code</Text>
             <TextInput
-              style={styles.input}
+              style={styles.otpInput}
               placeholder="000000"
               placeholderTextColor="#999"
               value={otp}
@@ -102,12 +104,15 @@ const VerifyResetOTPScreen = ({ navigation, route }: Props) => {
             )}
           </TouchableOpacity>
 
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.resendBtn}
             onPress={handleResendOTP}
             disabled={loading}
           >
-            <Text style={styles.resendText}>Didn't receive a code? <Text style={styles.resendHighlight}>Resend</Text></Text>
+            <Text style={styles.resendText}>
+              Didn't receive a code?{' '}
+              <Text style={styles.resendHighlight}>Resend</Text>
+            </Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -121,9 +126,9 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
   },
   scrollContent: {
-    padding: Spacing.lg,
+    padding: UI.screenPadding,
+    paddingTop: 32,
     flexGrow: 1,
-    paddingTop: 40,
   },
   header: {
     marginBottom: 40,
@@ -146,15 +151,14 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   label: {
-    fontSize: 14,
-    fontWeight: '600',
+    ...Typography.label,
     color: Colors.text,
     marginBottom: 8,
   },
-  input: {
+  otpInput: {
     height: 60,
     backgroundColor: Colors.white,
-    borderRadius: BorderRadius.md,
+    borderRadius: BorderRadius.input,
     paddingHorizontal: 16,
     fontSize: 24,
     color: Colors.text,
@@ -165,9 +169,9 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   button: {
-    height: 52,
+    height: UI.buttonHeight,
     backgroundColor: Colors.primary,
-    borderRadius: BorderRadius.md,
+    borderRadius: BorderRadius.button,
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 10,
@@ -179,8 +183,7 @@ const styles = StyleSheet.create({
   },
   buttonText: {
     color: Colors.white,
-    fontSize: 18,
-    fontWeight: '700',
+    ...Typography.button,
   },
   resendBtn: {
     marginTop: 30,

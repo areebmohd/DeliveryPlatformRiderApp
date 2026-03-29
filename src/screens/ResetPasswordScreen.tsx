@@ -9,11 +9,12 @@ import {
   Platform,
   ActivityIndicator,
   ScrollView,
+  StatusBar,
 } from 'react-native';
 import { supabase } from '../lib/supabaseClient';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { AuthStackParamList } from '../navigation/types';
-import { Colors, Spacing, BorderRadius } from '../theme/colors';
+import { Colors, BorderRadius, UI, Typography } from '../theme/colors';
 import { useCustomAlert } from '../context/CustomAlertContext';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'ResetPassword'>;
@@ -47,7 +48,7 @@ const ResetPasswordScreen = ({ navigation }: Props) => {
       });
 
       if (error) throw error;
-      
+
       showAlert(
         'Success',
         'Your password has been reset successfully. You can now login with your new password.',
@@ -65,7 +66,8 @@ const ResetPasswordScreen = ({ navigation }: Props) => {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.container}
     >
-      <ScrollView contentContainerStyle={styles.scrollContent}>
+      <StatusBar backgroundColor={Colors.background} barStyle="dark-content" />
+      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
         <View style={styles.header}>
           <Text style={styles.title}>New Password</Text>
           <Text style={styles.subtitle}>
@@ -123,9 +125,9 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
   },
   scrollContent: {
-    padding: Spacing.lg,
+    padding: UI.screenPadding,
+    paddingTop: 32,
     flexGrow: 1,
-    paddingTop: 40,
   },
   header: {
     marginBottom: 40,
@@ -148,15 +150,14 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   label: {
-    fontSize: 14,
-    fontWeight: '600',
+    ...Typography.label,
     color: Colors.text,
     marginBottom: 8,
   },
   input: {
-    height: 52,
+    height: UI.inputHeight,
     backgroundColor: Colors.white,
-    borderRadius: BorderRadius.md,
+    borderRadius: BorderRadius.input,
     paddingHorizontal: 16,
     fontSize: 16,
     color: Colors.text,
@@ -164,9 +165,9 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
   },
   button: {
-    height: 52,
+    height: UI.buttonHeight,
     backgroundColor: Colors.primary,
-    borderRadius: BorderRadius.md,
+    borderRadius: BorderRadius.button,
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 10,
@@ -178,8 +179,7 @@ const styles = StyleSheet.create({
   },
   buttonText: {
     color: Colors.white,
-    fontSize: 18,
-    fontWeight: '700',
+    ...Typography.button,
   },
 });
 
