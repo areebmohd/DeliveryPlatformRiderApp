@@ -171,9 +171,15 @@ const DeliveriesScreen = ({ navigation }: any) => {
                 styles.paymentBadgeText,
                 order.payment_status === 'verified' ? { color: Colors.success } : { color: Colors.textSecondary }
               ]}>
-                {order.payment_status === 'verified' ? 'PAID' : (order.payment_method === 'pay_on_delivery' ? 'COD' : 'PENDING')}
+                {order.payment_status === 'verified' ? 'PAID' : (order.payment_method === 'pay_on_delivery' ? 'COD' : (order.payment_method === 'pay_online' ? 'ONLINE' : 'PENDING'))}
               </Text>
             </View>
+            {order.payment_method === 'pay_online' && order.utr_number && (
+              <Text style={styles.paymentMetaText}>UTR: {order.utr_number}</Text>
+            )}
+            {order.payment_method === 'pay_online' && order.payer_name && (
+              <Text style={styles.paymentMetaText}>Payer: {order.payer_name}</Text>
+            )}
           </View>
           {!isHistory && (
             <TouchableOpacity 
@@ -735,6 +741,13 @@ const styles = StyleSheet.create({
   paymentBadgeText: {
     fontSize: 10,
     fontWeight: '900',
+  },
+  paymentMetaText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: Colors.textSecondary,
+    marginTop: 2,
+    marginLeft: 6,
   },
   paymentAlert: {
     flexDirection: 'row',
