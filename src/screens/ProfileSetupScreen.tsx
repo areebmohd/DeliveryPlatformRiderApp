@@ -44,38 +44,31 @@ const ProfileSetupScreen = ({ navigation, route }: Props) => {
     const {
       data: { user },
     } = await supabase.auth.getUser();
-    if (!user) return;
+    if (!user) {
+      setLoading(false);
+      return;
+    }
 
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', user.id)
-      .single();
+    const [profileRes, riderProfileRes, addressRes] = await Promise.all([
+      supabase.from('profiles').select('*').eq('id', user.id).single(),
+      supabase.from('rider_profiles').select('*').eq('profile_id', user.id).maybeSingle(),
+      supabase.from('addresses').select('*').eq('user_id', user.id).eq('is_default', true).maybeSingle(),
+    ]);
 
+    const profile = profileRes.data;
     if (profile) {
       setFullName(profile.full_name || '');
       setPhone(profile.phone || '');
       setUpiId(profile.upi_id || '');
     }
 
-    const { data: riderProfile } = await supabase
-      .from('rider_profiles')
-      .select('*')
-      .eq('profile_id', user.id)
-      .single();
-
+    const riderProfile = riderProfileRes.data;
     if (riderProfile) {
       setVehicleType(riderProfile.vehicle_type || '');
       setVehicleNumber(riderProfile.vehicle_number || '');
     }
 
-    const { data: address } = await supabase
-      .from('addresses')
-      .select('*')
-      .eq('user_id', user.id)
-      .eq('is_default', true)
-      .single();
-
+    const address = addressRes.data;
     if (address) {
       setAddressLine(address.address_line || '');
       setPincode(address.pincode || '');
@@ -87,20 +80,23 @@ const ProfileSetupScreen = ({ navigation, route }: Props) => {
   }
 
   async function handleSave() {
-    if (
-      !fullName ||
-      !phone ||
-      !upiId ||
-      !addressLine ||
-      !pincode ||
-      !city ||
-      !state ||
-      !vehicleType ||
-      !vehicleNumber
-    ) {
+    // Identify each missing field by name
+    const missingFields: string[] = [];
+    if (!fullName.trim())      missingFields.push('Full Name');
+    if (!phone.trim())         missingFields.push('Phone Number');
+    if (!upiId.trim())         missingFields.push('UPI ID');
+    if (!addressLine.trim())   missingFields.push('Address Line');
+    if (!sectorArea.trim())    missingFields.push('Sector / Area');
+    if (!pincode.trim())       missingFields.push('Pincode');
+    if (!city.trim())          missingFields.push('City');
+    if (!state.trim())         missingFields.push('State');
+    if (!vehicleType.trim())   missingFields.push('Vehicle Type');
+    if (!vehicleNumber.trim()) missingFields.push('Vehicle Number');
+
+    if (missingFields.length > 0) {
       showAlert(
-        'Error',
-        'Please fill all mandatory fields (including vehicle details)',
+        '⚠️ Missing Information',
+        `Please fill in the mandatory fields:\n\n• ${missingFields.join('\n• ')}`,
       );
       return;
     }
@@ -122,7 +118,7 @@ const ProfileSetupScreen = ({ navigation, route }: Props) => {
         full_name: trimmedFullName,
         phone: trimmedPhone,
         upi_id: trimmedUpiId,
-        role: 'rider', // Ensure role is rider
+        role: 'rider',
       })
       .eq('id', user.id);
 
@@ -132,13 +128,7 @@ const ProfileSetupScreen = ({ navigation, route }: Props) => {
       return;
     }
 
-    // 2. Update/Create Address
-    const { data: existingAddress } = await supabase
-      .from('addresses')
-      .select('id')
-      .eq('user_id', user.id)
-      .limit(1);
-
+    // 2. Prepare Address and Rider Profile data
     const addressData = {
       user_id: user.id,
       address_line: addressLine.trim(),
@@ -151,27 +141,6 @@ const ProfileSetupScreen = ({ navigation, route }: Props) => {
       receiver_phone: trimmedPhone,
     };
 
-    if (existingAddress && existingAddress.length > 0) {
-      const { error: addressError } = await supabase
-        .from('addresses')
-        .update(addressData)
-        .eq('id', existingAddress[0].id);
-      if (addressError)
-        showAlert('Error updating address', addressError.message);
-    } else {
-      const { error: addressError } = await supabase
-        .from('addresses')
-        .insert([addressData]);
-      if (addressError) showAlert('Error saving address', addressError.message);
-    }
-
-    // 3. Update/Create Rider Profile
-    const { data: existingRiderProfile } = await supabase
-      .from('rider_profiles')
-      .select('id')
-      .eq('profile_id', user.id)
-      .limit(1);
-
     const riderProfileData = {
       profile_id: user.id,
       upi_id: trimmedUpiId,
@@ -179,36 +148,56 @@ const ProfileSetupScreen = ({ navigation, route }: Props) => {
       vehicle_number: vehicleNumber.trim(),
     };
 
-    if (!existingRiderProfile || existingRiderProfile.length === 0) {
-      await supabase.from('rider_profiles').insert([riderProfileData]);
+    // Run existing checks concurrently
+    const [existingAddressRes, existingRiderRes] = await Promise.all([
+      supabase.from('addresses').select('id').eq('user_id', user.id).limit(1),
+      supabase.from('rider_profiles').select('id').eq('profile_id', user.id).limit(1),
+    ]);
+
+    const existingAddress = existingAddressRes.data;
+    const existingRiderProfile = existingRiderRes.data;
+
+    // Run insert/update mutations concurrently
+    const mutations = [];
+
+    if (existingAddress && existingAddress.length > 0) {
+      mutations.push(supabase.from('addresses').update(addressData).eq('id', existingAddress[0].id));
     } else {
-      await supabase
-        .from('rider_profiles')
-        .update(riderProfileData)
-        .eq('profile_id', user.id);
+      mutations.push(supabase.from('addresses').insert([addressData]));
+    }
+
+    if (existingRiderProfile && existingRiderProfile.length > 0) {
+      mutations.push(supabase.from('rider_profiles').update(riderProfileData).eq('profile_id', user.id));
+    } else {
+      mutations.push(supabase.from('rider_profiles').insert([riderProfileData]));
+    }
+
+    const mutationResults = await Promise.all(mutations);
+
+    // Check for errors in concurrent mutations
+    for (const res of mutationResults) {
+      if (res.error) {
+        showAlert('Error saving profile data', res.error.message);
+        setLoading(false);
+        return;
+      }
     }
 
     setLoading(false);
-    if (!isEditing) {
-      showAlert(
-        'Success',
-        'Profile setup complete! Please wait a moment while we set things up.',
-        [
-          {
-            text: 'OK',
-            onPress: () => {
-              // No explicit navigation needed as App.tsx's interval will catch it,
-              // but we can try to pop to top to trigger a re-render if possible.
-              // However, popping might fail if we're not in a stack.
-              // The interval is at 2 seconds, which is fast enough.
-            },
+    showAlert(
+      'Profile Saved ✓',
+      isEditing ? 'Your profile has been updated.' : 'Profile setup complete! You\'re all set.',
+      [
+        {
+          text: 'OK',
+          onPress: () => {
+            if (isEditing) {
+              navigation.goBack();
+            }
           },
-        ],
-      );
-    } else {
-      showAlert('Success', 'Profile updated!');
-      navigation.goBack();
-    }
+        },
+      ],
+    );
   }
 
   return (
@@ -221,16 +210,18 @@ const ProfileSetupScreen = ({ navigation, route }: Props) => {
       >
       <ScrollView
         style={styles.container}
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, isEditing && styles.scrollContentEditing]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.header}>
-          <Text style={styles.heading}>Rider Information</Text>
-          <Text style={styles.subheading}>
-            It is mandatory to fill all the fields.
-          </Text>
-        </View>
+        {!isEditing && (
+          <View style={styles.header}>
+            <Text style={styles.heading}>Rider Information</Text>
+            <Text style={styles.subheading}>
+              It is mandatory to fill all the fields.
+            </Text>
+          </View>
+        )}
         <View style={styles.form}>
           <Text style={styles.sectionTitle}>Personal Details</Text>
           <TextInput
@@ -342,6 +333,7 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: Colors.background },
   container: { flex: 1, backgroundColor: Colors.background },
   scrollContent: { padding: UI.screenPadding, paddingBottom: 40 },
+  scrollContentEditing: { paddingTop: 12 },
   header: { marginBottom: 28 },
   heading: {
     fontSize: 26,
