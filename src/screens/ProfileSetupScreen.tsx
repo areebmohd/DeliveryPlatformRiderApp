@@ -7,7 +7,11 @@ import {
   TouchableOpacity,
   ScrollView,
   ActivityIndicator,
+  StatusBar,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabaseClient';
 import { useCustomAlert } from '../context/CustomAlertContext';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -36,7 +40,9 @@ const ProfileSetupScreen = ({ navigation, route }: Props) => {
 
   async function fetchCurrentProfile() {
     setLoading(true);
-    const { data: { user } } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
     if (!user) return;
 
     const { data: profile } = await supabase
@@ -80,13 +86,28 @@ const ProfileSetupScreen = ({ navigation, route }: Props) => {
   }
 
   async function handleSave() {
-    if (!fullName || !phone || !upiId || !addressLine || !pincode || !city || !state) {
-      showAlert('Error', 'Please fill all mandatory fields');
+    if (
+      !fullName ||
+      !phone ||
+      !upiId ||
+      !addressLine ||
+      !pincode ||
+      !city ||
+      !state ||
+      !vehicleType ||
+      !vehicleNumber
+    ) {
+      showAlert(
+        'Error',
+        'Please fill all mandatory fields (including vehicle details)',
+      );
       return;
     }
 
     setLoading(true);
-    const { data: { user } } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
     if (!user) return;
 
     // 1. Update Profile
@@ -134,7 +155,8 @@ const ProfileSetupScreen = ({ navigation, route }: Props) => {
         .from('addresses')
         .update(addressData)
         .eq('id', existingAddress[0].id);
-      if (addressError) showAlert('Error updating address', addressError.message);
+      if (addressError)
+        showAlert('Error updating address', addressError.message);
     } else {
       const { error: addressError } = await supabase
         .from('addresses')
@@ -159,20 +181,28 @@ const ProfileSetupScreen = ({ navigation, route }: Props) => {
     if (!existingRiderProfile || existingRiderProfile.length === 0) {
       await supabase.from('rider_profiles').insert([riderProfileData]);
     } else {
-      await supabase.from('rider_profiles').update(riderProfileData).eq('profile_id', user.id);
+      await supabase
+        .from('rider_profiles')
+        .update(riderProfileData)
+        .eq('profile_id', user.id);
     }
 
     setLoading(false);
     if (!isEditing) {
       showAlert(
-        'Success', 
+        'Success',
         'Profile setup complete! Please wait a moment while we set things up.',
-        [{ text: 'OK', onPress: () => {
-          // No explicit navigation needed as App.tsx's interval will catch it,
-          // but we can try to pop to top to trigger a re-render if possible.
-          // However, popping might fail if we're not in a stack.
-          // The interval is at 2 seconds, which is fast enough.
-        }}]
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              // No explicit navigation needed as App.tsx's interval will catch it,
+              // but we can try to pop to top to trigger a re-render if possible.
+              // However, popping might fail if we're not in a stack.
+              // The interval is at 2 seconds, which is fast enough.
+            },
+          },
+        ],
       );
     } else {
       showAlert('Success', 'Profile updated!');
@@ -181,107 +211,154 @@ const ProfileSetupScreen = ({ navigation, route }: Props) => {
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
-      <View style={styles.form}>
-        <Text style={styles.sectionTitle}>Personal Details</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Full Name"
-          placeholderTextColor="#999"
-          value={fullName}
-          onChangeText={setFullName}
-        />
-        <TextInput
-          style={styles.input}
-          placeholder="Phone Number"
-          placeholderTextColor="#999"
-          value={phone}
-          onChangeText={setPhone}
-          keyboardType="phone-pad"
-        />
-        <TextInput
-          style={styles.input}
-          placeholder="UPI ID (for payments)"
-          placeholderTextColor="#999"
-          value={upiId}
-          onChangeText={setUpiId}
-          autoCapitalize="none"
-        />
-
-        <Text style={[styles.sectionTitle, { marginTop: 20 }]}>Address Details</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Address Line 1"
-          placeholderTextColor="#999"
-          value={addressLine}
-          onChangeText={setAddressLine}
-        />
-        <TextInput
-          style={styles.input}
-          placeholder="Sector / Area"
-          placeholderTextColor="#999"
-          value={sectorArea}
-          onChangeText={setSectorArea}
-        />
-        <View style={styles.row}>
-          <TextInput
-            style={[styles.input, { flex: 1, marginRight: 10 }]}
-            placeholder="Pincode"
-            placeholderTextColor="#999"
-            value={pincode}
-            onChangeText={setPincode}
-            keyboardType="number-pad"
-          />
-          <TextInput
-            style={[styles.input, { flex: 1 }]}
-            placeholder="City"
-            placeholderTextColor="#999"
-            value={city}
-            onChangeText={setCity}
-          />
+    <SafeAreaView style={styles.safeArea} edges={isEditing ? ['bottom'] : ['top', 'bottom']}>
+      <StatusBar backgroundColor="#f8f9fa" barStyle="dark-content" />
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+      >
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.header}>
+          <Text style={styles.heading}>Rider Information</Text>
+          <Text style={styles.subheading}>
+            It is mandatory to fill all the fields.
+          </Text>
         </View>
-        <TextInput
-          style={styles.input}
-          placeholder="State"
-          placeholderTextColor="#999"
-          value={state}
-          onChangeText={setState}
-        />
+        <View style={styles.form}>
+          <Text style={styles.sectionTitle}>Personal Details</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Full Name"
+            placeholderTextColor="#999"
+            value={fullName}
+            onChangeText={setFullName}
+          />
+          <TextInput
+            style={styles.input}
+            placeholder="Phone Number"
+            placeholderTextColor="#999"
+            value={phone}
+            onChangeText={setPhone}
+            keyboardType="phone-pad"
+          />
+          <TextInput
+            style={styles.input}
+            placeholder="UPI ID (for payments)"
+            placeholderTextColor="#999"
+            value={upiId}
+            onChangeText={setUpiId}
+            autoCapitalize="none"
+          />
 
-        <Text style={[styles.sectionTitle, { marginTop: 20 }]}>Vehicle Details</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Vehicle Type (e.g. Honda Activa)"
-          placeholderTextColor="#999"
-          value={vehicleType}
-          onChangeText={setVehicleType}
-        />
-        <TextInput
-          style={styles.input}
-          placeholder="Vehicle Number (e.g. DL 1S AB 1234)"
-          placeholderTextColor="#999"
-          value={vehicleNumber}
-          onChangeText={setVehicleNumber}
-          autoCapitalize="characters"
-        />
+          <Text style={[styles.sectionTitle, { marginTop: 20 }]}>
+            Address Details
+          </Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Address Line 1"
+            placeholderTextColor="#999"
+            value={addressLine}
+            onChangeText={setAddressLine}
+          />
+          <TextInput
+            style={styles.input}
+            placeholder="Sector / Area"
+            placeholderTextColor="#999"
+            value={sectorArea}
+            onChangeText={setSectorArea}
+          />
+          <View style={styles.row}>
+            <TextInput
+              style={[styles.input, { flex: 1, marginRight: 10 }]}
+              placeholder="Pincode"
+              placeholderTextColor="#999"
+              value={pincode}
+              onChangeText={setPincode}
+              keyboardType="number-pad"
+            />
+            <TextInput
+              style={[styles.input, { flex: 1 }]}
+              placeholder="City"
+              placeholderTextColor="#999"
+              value={city}
+              onChangeText={setCity}
+            />
+          </View>
+          <TextInput
+            style={styles.input}
+            placeholder="State"
+            placeholderTextColor="#999"
+            value={state}
+            onChangeText={setState}
+          />
 
-        <TouchableOpacity style={styles.button} onPress={handleSave} disabled={loading}>
-          {loading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.buttonText}>{isEditing ? 'Update Profile' : 'Complete Setup'}</Text>
-          )}
-        </TouchableOpacity>
-      </View>
-    </ScrollView>
+          <Text style={[styles.sectionTitle, { marginTop: 20 }]}>
+            Vehicle Details
+          </Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Vehicle Type (e.g. Honda Activa)"
+            placeholderTextColor="#999"
+            value={vehicleType}
+            onChangeText={setVehicleType}
+          />
+          <TextInput
+            style={styles.input}
+            placeholder="Vehicle Number (e.g. DL 1S AB 1234)"
+            placeholderTextColor="#999"
+            value={vehicleNumber}
+            onChangeText={setVehicleNumber}
+            autoCapitalize="characters"
+          />
+
+          <TouchableOpacity
+            style={styles.button}
+            onPress={handleSave}
+            disabled={loading}
+          >
+            {loading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.buttonText}>
+                {isEditing ? 'Update Profile' : 'Complete Setup'}
+              </Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: '#f8f9fa' },
   container: { flex: 1, backgroundColor: '#f8f9fa' },
   scrollContent: { padding: 24, paddingBottom: 40 },
+  header: { marginBottom: 28 },
+  heading: {
+    fontSize: 26,
+    fontWeight: '800',
+    color: '#007bff',
+  },
+  subheading: {
+    fontSize: 13,
+    color: '#dc3545',
+    fontWeight: '500',
+  },
   form: { width: '100%' },
-  sectionTitle: { fontSize: 18, fontWeight: '700', color: '#007bff', marginBottom: 15 },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#007bff',
+    marginBottom: 15,
+  },
   input: {
     height: 52,
     backgroundColor: '#f8f9fa',
