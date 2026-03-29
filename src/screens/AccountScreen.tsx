@@ -1,17 +1,27 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ScrollView,
+  StatusBar,
+} from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { supabase } from '../lib/supabaseClient';
 import { User } from '@supabase/supabase-js';
 import { useCustomAlert } from '../context/CustomAlertContext';
+import { Colors, BorderRadius, UI } from '../theme/colors';
 
 const AccountOption = ({ icon, label, onPress }: { icon: string; label: string; onPress: () => void }) => (
-  <TouchableOpacity style={styles.optionContainer} onPress={onPress}>
+  <TouchableOpacity style={styles.optionContainer} onPress={onPress} activeOpacity={0.7}>
     <View style={styles.optionLeft}>
-      <Icon name={icon} size={24} color="#007bff" style={styles.optionIcon} />
+      <View style={styles.optionIconWrap}>
+        <Icon name={icon} size={22} color={Colors.primary} />
+      </View>
       <Text style={styles.optionLabel}>{label}</Text>
     </View>
-    <Icon name="chevron-right" size={24} color="#adb5bd" />
+    <Icon name="chevron-right" size={22} color={Colors.border} />
   </TouchableOpacity>
 );
 
@@ -38,12 +48,9 @@ const AccountScreen = ({ navigation }: { navigation: any }) => {
         .single();
       if (error) throw error;
       setProfile(profileData);
-
-      // Profile data is fetched, rider profile availability is no longer manually toggled
     }
     setLoading(false);
   }
-
 
   const handleLogout = async () => {
     showAlert(
@@ -51,24 +58,31 @@ const AccountScreen = ({ navigation }: { navigation: any }) => {
       'Are you sure you want to sign out?',
       [
         { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Sign Out', 
+        {
+          text: 'Sign Out',
           style: 'destructive',
           onPress: async () => {
             const { error } = await supabase.auth.signOut();
             if (error) showAlert('Error', error.message);
-          }
-        }
+          },
+        },
       ]
     );
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 40 }}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={{ paddingBottom: 40 }}
+      showsVerticalScrollIndicator={false}
+    >
+      <StatusBar backgroundColor={Colors.background} barStyle="dark-content" />
+
+      {/* Profile Header */}
       <View style={styles.header}>
         <View style={styles.avatarContainer}>
           <View style={styles.avatarBackground}>
-            <Icon name="account" size={50} color="#fff" />
+            <Icon name="account" size={50} color={Colors.white} />
           </View>
           <View style={styles.roleBadge}>
             <Text style={styles.roleBadgeText}>RIDER</Text>
@@ -76,10 +90,10 @@ const AccountScreen = ({ navigation }: { navigation: any }) => {
         </View>
         <Text style={styles.title}>{profile?.full_name || 'Rider'}</Text>
         <Text style={styles.subtitle}>{profile?.phone || 'No phone added'}</Text>
-        
+
         {profile?.rider_profiles?.[0]?.vehicle_type && profile?.rider_profiles?.[0]?.vehicle_number && (
           <View style={styles.vehicleInfo}>
-            <Icon name="bicycle" size={16} color="#007bff" />
+            <Icon name="bicycle" size={16} color={Colors.primary} />
             <Text style={styles.vehicleText}>
               {profile.rider_profiles[0].vehicle_type} • {profile.rider_profiles[0].vehicle_number}
             </Text>
@@ -87,29 +101,31 @@ const AccountScreen = ({ navigation }: { navigation: any }) => {
         )}
       </View>
 
+      {/* Options */}
       <View style={styles.optionsSection}>
-        <AccountOption 
-          icon="account-edit" 
-          label="Edit Profile" 
-          onPress={() => navigation.navigate('ProfileSetup', { isEditing: true })} 
+        <AccountOption
+          icon="account-edit"
+          label="Edit Profile"
+          onPress={() => navigation.navigate('ProfileSetup', { isEditing: true })}
         />
-        <AccountOption icon="credit-card" label="Payments" onPress={() => {}} />
-        <AccountOption 
-          icon="bell" 
-          label="Notifications" 
-          onPress={() => navigation.navigate('Notifications')} 
+        <AccountOption icon="credit-card-outline" label="Payments" onPress={() => {}} />
+        <AccountOption
+          icon="bell-outline"
+          label="Notifications"
+          onPress={() => navigation.navigate('Notifications')}
         />
-        <AccountOption icon="headphones" label="Rider Support" onPress={() => {}} />
+        <AccountOption icon="headset" label="Rider Support" onPress={() => {}} />
       </View>
-      
+
+      {/* Footer */}
       <View style={styles.footer}>
         <View style={styles.emailBadge}>
-          <Icon name="email-outline" size={16} color="#6c757d" />
+          <Icon name="email-outline" size={16} color={Colors.textSecondary} />
           <Text style={styles.loginEmail}>{user?.email}</Text>
         </View>
-        
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-          <Icon name="logout-variant" size={20} color="#dc3545" />
+
+        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout} activeOpacity={0.8}>
+          <Icon name="logout-variant" size={20} color={Colors.danger} />
           <Text style={styles.logoutText}>Sign Out</Text>
         </TouchableOpacity>
       </View>
@@ -120,26 +136,26 @@ const AccountScreen = ({ navigation }: { navigation: any }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: Colors.background,
   },
   header: {
     paddingTop: 30,
-    paddingBottom: 10,
+    paddingBottom: 16,
     alignItems: 'center',
-    backgroundColor: '#f8f9fa',
+    backgroundColor: Colors.background,
   },
   avatarContainer: {
     position: 'relative',
-    marginBottom: 15,
+    marginBottom: 16,
   },
   avatarBackground: {
     width: 90,
     height: 90,
-    backgroundColor: '#007bff',
+    backgroundColor: Colors.primary,
     borderRadius: 45,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#007bff',
+    shadowColor: Colors.primary,
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.3,
     shadowRadius: 15,
@@ -148,75 +164,84 @@ const styles = StyleSheet.create({
   roleBadge: {
     position: 'absolute',
     bottom: -5,
-    backgroundColor: '#28a745',
+    alignSelf: 'center',
+    backgroundColor: Colors.success,
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
     borderWidth: 2,
-    borderColor: '#fff',
+    borderColor: Colors.white,
   },
   roleBadgeText: {
-    color: '#fff',
+    color: Colors.white,
     fontSize: 10,
     fontWeight: '900',
     letterSpacing: 0.5,
   },
   title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#212529',
+    fontSize: 22,
+    fontWeight: '800',
+    color: Colors.text,
     marginTop: 8,
   },
   subtitle: {
-    fontSize: 16,
-    color: '#6c757d',
+    fontSize: 15,
+    color: Colors.textSecondary,
+    fontWeight: '500',
     marginTop: 4,
   },
   vehicleInfo: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#e7f1ff',
+    backgroundColor: Colors.primaryLight,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 20,
-    marginTop: 10,
+    marginTop: 12,
   },
   vehicleText: {
-    fontSize: 14,
-    color: '#007bff',
+    fontSize: 13,
+    color: Colors.primary,
     fontWeight: '600',
     marginLeft: 6,
   },
   optionsSection: {
     marginTop: 20,
-    backgroundColor: '#fff',
+    backgroundColor: Colors.white,
     borderTopWidth: 1,
     borderBottomWidth: 1,
-    borderColor: '#f1f3f5',
+    borderColor: Colors.border,
   },
   optionContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 18,
+    paddingVertical: 16,
+    paddingHorizontal: UI.screenPadding,
     borderBottomWidth: 1,
-    borderBottomColor: '#f8f9fa',
+    borderBottomColor: Colors.background,
   },
   optionLeft: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  optionIcon: {
-    marginRight: 16,
+  optionIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: Colors.primaryLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 14,
   },
   optionLabel: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#343a40',
+    fontSize: 15,
+    fontWeight: '600',
+    color: Colors.text,
   },
   footer: {
-    marginTop: 40,
-    paddingHorizontal: 24,
+    marginTop: 36,
+    paddingHorizontal: UI.screenPadding,
     alignItems: 'center',
   },
   emailBadge: {
@@ -230,29 +255,29 @@ const styles = StyleSheet.create({
   },
   loginEmail: {
     fontSize: 13,
-    color: '#6c757d',
+    color: Colors.textSecondary,
     marginLeft: 8,
     fontWeight: '500',
   },
   logoutButton: {
     flexDirection: 'row',
     width: '100%',
-    padding: 16,
-    backgroundColor: '#fff',
-    borderRadius: 14,
+    paddingVertical: 16,
+    backgroundColor: Colors.white,
+    borderRadius: BorderRadius.card,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1.5,
     borderColor: '#ffdada',
-    shadowColor: '#dc3545',
+    shadowColor: Colors.danger,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.08,
     shadowRadius: 10,
     elevation: 2,
   },
   logoutText: {
-    color: '#dc3545',
-    fontSize: 16,
+    color: Colors.danger,
+    fontSize: 15,
     fontWeight: '700',
     marginLeft: 10,
   },

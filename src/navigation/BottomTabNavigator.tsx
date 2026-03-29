@@ -6,7 +6,7 @@ import DashboardScreen from '../screens/DashboardScreen';
 import DeliveriesScreen from '../screens/DeliveriesScreen';
 import AccountScreen from '../screens/AccountScreen';
 
-import { Colors } from '../theme/colors';
+import { Colors, UI } from '../theme/colors';
 
 const Tab = createBottomTabNavigator();
 
@@ -27,25 +27,29 @@ const BottomTabNavigator = () => {
 
           return <Icon name={iconName} size={size} color={color} />;
         },
-        tabBarActiveTintColor: '#007bff',
-        tabBarInactiveTintColor: 'gray',
+        tabBarActiveTintColor: Colors.primary,
+        tabBarInactiveTintColor: Colors.textSecondary,
         headerShown: true,
         headerStyle: {
           backgroundColor: Colors.white,
         },
         headerTitleStyle: {
-          fontWeight: 'bold',
-          fontSize: 22,
+          fontWeight: '800',
+          fontSize: 20,
           color: Colors.text,
         },
         headerTitleAlign: 'center',
         tabBarStyle: {
-          height: 60,
-          paddingBottom: 10,
+          height: UI.tabBarHeight,
+          paddingBottom: UI.tabBarPaddingBottom,
+          backgroundColor: Colors.white,
+          borderTopColor: Colors.border,
+          borderTopWidth: 1,
         },
         tabBarLabelStyle: {
           fontSize: 12,
-          marginBottom: 5,
+          fontWeight: '600',
+          marginBottom: 2,
         },
       })}
     >

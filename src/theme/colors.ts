@@ -30,4 +30,36 @@ export const BorderRadius = {
   md: 8,
   lg: 16,
   xl: 24,
+  input: 12,
+  button: 12,
+  card: 16,
+};
+
+export const Typography = {
+  /** Screen/page headings */
+  pageTitle: { fontSize: 26, fontWeight: '800' as const },
+  /** Sub-text under page title */
+  pageSubtitle: { fontSize: 14, fontWeight: '500' as const },
+  /** Navigation header title */
+  navTitle: { fontSize: 20, fontWeight: '800' as const },
+  /** Section labels (uppercase) */
+  sectionLabel: { fontSize: 14, fontWeight: '800' as const },
+  /** Card / list item title */
+  cardTitle: { fontSize: 16, fontWeight: '700' as const },
+  /** Regular body text */
+  body: { fontSize: 14, fontWeight: '400' as const },
+  /** Small metadata text */
+  caption: { fontSize: 12, fontWeight: '400' as const },
+  /** Input label */
+  label: { fontSize: 14, fontWeight: '600' as const },
+  /** Button text */
+  button: { fontSize: 16, fontWeight: '700' as const },
+};
+
+export const UI = {
+  inputHeight: 52,
+  buttonHeight: 52,
+  tabBarHeight: 60,
+  tabBarPaddingBottom: 10,
+  screenPadding: 24,
 };

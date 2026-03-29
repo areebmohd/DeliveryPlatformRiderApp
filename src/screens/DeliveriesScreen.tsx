@@ -555,7 +555,7 @@ const styles = StyleSheet.create({
   },
   orderNumber: {
     fontSize: 16,
-    fontWeight: 'bold',
+    fontWeight: '700',
     color: Colors.text,
   },
   statusBadge: {
@@ -593,9 +593,9 @@ const styles = StyleSheet.create({
   },
   mapBtnText: {
     color: Colors.white,
-    fontWeight: 'bold',
+    fontWeight: '700',
     marginLeft: 4,
-    fontSize: 12,
+    fontSize: 13,
   },
   divider: {
     height: 1,
@@ -611,20 +611,21 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.sm,
   },
   sectionTitle: {
-    fontSize: 14,
-    fontWeight: 'bold',
+    fontSize: 12,
+    fontWeight: '700',
     color: Colors.textSecondary,
     marginLeft: 6,
     textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   storeName: {
-    fontSize: 18,
-    fontWeight: 'bold',
+    fontSize: 17,
+    fontWeight: '700',
     color: Colors.text,
   },
   customerName: {
-    fontSize: 18,
-    fontWeight: 'bold',
+    fontSize: 17,
+    fontWeight: '700',
     color: Colors.text,
   },
   addressText: {
@@ -635,7 +636,7 @@ const styles = StyleSheet.create({
   phoneText: {
     fontSize: 14,
     color: Colors.primary,
-    fontWeight: 'bold',
+    fontWeight: '700',
     marginTop: 4,
   },
   productList: {
@@ -655,7 +656,7 @@ const styles = StyleSheet.create({
   },
   productPrice: {
     fontSize: 14,
-    fontWeight: 'bold',
+    fontWeight: '700',
     color: Colors.text,
   },
   acceptBtn: {
@@ -667,8 +668,8 @@ const styles = StyleSheet.create({
   },
   acceptBtnText: {
     color: Colors.dark,
-    fontWeight: 'bold',
-    fontSize: 15,
+    fontWeight: '700',
+    fontSize: 16,
   },
   pickupBtn: {
     backgroundColor: Colors.warning,
@@ -679,15 +680,15 @@ const styles = StyleSheet.create({
   },
   pickupBtnText: {
     color: Colors.dark,
-    fontWeight: 'bold',
-    fontSize: 15,
+    fontWeight: '700',
+    fontSize: 16,
   },
   otpSection: {
     marginTop: Spacing.md,
   },
   otpLabel: {
     fontSize: 14,
-    fontWeight: 'bold',
+    fontWeight: '700',
     color: Colors.text,
     marginBottom: 8,
   },
@@ -715,8 +716,8 @@ const styles = StyleSheet.create({
   },
   completeBtnText: {
     color: Colors.white,
-    fontWeight: 'bold',
-    fontSize: 15,
+    fontWeight: '700',
+    fontSize: 16,
   },
   paymentBadge: {
     flexDirection: 'row',
@@ -783,8 +784,8 @@ const styles = StyleSheet.create({
   },
   storePickupBtnText: {
     color: Colors.dark,
-    fontWeight: 'bold',
-    fontSize: 14,
+    fontWeight: '700',
+    fontSize: 15,
   },
   pickedUpBadge: {
     flexDirection: 'row',
@@ -800,7 +801,7 @@ const styles = StyleSheet.create({
   },
   pickedUpBadgeText: {
     color: Colors.success,
-    fontWeight: 'bold',
+    fontWeight: '700',
     fontSize: 12,
   },
 });
