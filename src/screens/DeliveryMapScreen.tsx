@@ -1,11 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
-  Alert,
   Dimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -16,7 +15,7 @@ import { Colors, Spacing, BorderRadius } from '../theme/colors';
 import Geolocation from 'react-native-geolocation-service';
 import { MAP_SDK_KEY, REST_API_KEY } from '@env';
 
-const { width, height } = Dimensions.get('window');
+const { width } = Dimensions.get('window');
 
 const DeliveryMapScreen = ({ route, navigation }: any) => {
   const { orderId } = route.params;
@@ -47,11 +46,86 @@ const DeliveryMapScreen = ({ route, navigation }: any) => {
     return () => Geolocation.clearWatch(watchId);
   }, []);
 
+  const [nextRouteLine, setNextRouteLine] = useState<any>(null);
+  const [remainingRouteLine, setRemainingRouteLine] = useState<any>(null);
+
+  const [lastStopsHash, setLastStopsHash] = useState<string>('');
+
+  const calculateAndFetchRoute = useCallback(async () => {
+    if (!riderLocation || activeOrders.length === 0) return;
+
+    const selectedOrder = activeOrders.find(o => o.id === orderId) || activeOrders[0];
+    if (!selectedOrder) return;
+
+    const customerLoc = parseLocation(selectedOrder.addresses?.location);
+
+    let stops: any[] = [];
+    if (selectedOrder.status === 'picked_up') {
+      if (customerLoc) stops = [customerLoc];
+    } else {
+      const orderStores = new Map();
+      if (selectedOrder.stores) orderStores.set(selectedOrder.stores.id, selectedOrder.stores);
+      selectedOrder.order_items?.forEach((item: any) => {
+        const s = item.products?.stores;
+        if (s) {
+          const storeItems = selectedOrder.order_items.filter((oi: any) => (oi.products?.stores?.id || selectedOrder.stores?.id) === s.id);
+          const allPicked = storeItems.every((oi: any) => oi.is_picked_up);
+          if (!allPicked) orderStores.set(s.id, s);
+        }
+      });
+      stops = Array.from(orderStores.values())
+        .map(s => parseLocation(s.location))
+        .filter(l => !!l);
+      if (customerLoc) stops.push(customerLoc);
+    }
+
+    if (stops.length === 0) {
+      setNextRouteLine(null);
+      setRemainingRouteLine(null);
+      setLastStopsHash('');
+      return;
+    }
+
+    // MEMORY/SPEED FIX: If the stops haven't changed, don't spam the routing API 
+    // every time the rider's GPS ticks.
+    const currentStopsHash = stops.map(s => `${s.longitude},${s.latitude}`).join('|');
+    if (lastStopsHash === currentStopsHash && nextRouteLine) {
+      return;
+    }
+
+    try {
+      const nextCoords = `${riderLocation.longitude},${riderLocation.latitude};${stops[0].longitude},${stops[0].latitude}`;
+      const nextUrl = `https://apis.mappls.com/advancedmaps/v1/${REST_API_KEY}/route_adv/driving/${nextCoords}?alternatives=false&steps=false&overview=full&geometries=geojson`;
+      const nextResponse = await fetch(nextUrl);
+      const nextResult = await nextResponse.json();
+      if (nextResult.routes && nextResult.routes.length > 0) {
+        setNextRouteLine(nextResult.routes[0].geometry);
+      }
+
+      if (stops.length > 1) {
+        const remainingCoords = stops.map(s => `${s.longitude},${s.latitude}`).join(';');
+        const remainingUrl = `https://apis.mappls.com/advancedmaps/v1/${REST_API_KEY}/route_adv/driving/${remainingCoords}?alternatives=false&steps=false&overview=full&geometries=geojson`;
+        const remResponse = await fetch(remainingUrl);
+        const remResult = await remResponse.json();
+        if (remResult.routes && remResult.routes.length > 0) {
+          setRemainingRouteLine(remResult.routes[0].geometry);
+        }
+      } else {
+        setRemainingRouteLine(null);
+      }
+
+      setLastStopsHash(currentStopsHash);
+      fitToStops(stops);
+    } catch (error) {
+      console.error('Error fetching route:', error);
+    }
+  }, [riderLocation, activeOrders, orderId, stores, lastStopsHash, nextRouteLine]);
+
   useEffect(() => {
     if (activeOrders.length > 0 && riderLocation) {
       calculateAndFetchRoute();
     }
-  }, [activeOrders, riderLocation]);
+  }, [activeOrders, riderLocation, calculateAndFetchRoute]);
 
   const fetchActiveOrders = async () => {
     try {
@@ -103,83 +177,7 @@ const DeliveryMapScreen = ({ route, navigation }: any) => {
     }
   };
 
-  const [nextRouteLine, setNextRouteLine] = useState<any>(null);
-  const [remainingRouteLine, setRemainingRouteLine] = useState<any>(null);
 
-  const calculateAndFetchRoute = async () => {
-    if (!riderLocation || activeOrders.length === 0) return;
-
-    const selectedOrder = activeOrders.find(o => o.id === orderId) || activeOrders[0];
-    if (!selectedOrder) return;
-
-    const customerLoc = parseLocation(selectedOrder.addresses?.location);
-    
-    // Determine stops based on status
-    let stops: any[] = [];
-    if (selectedOrder.status === 'picked_up') {
-      // Direct to customer
-      if (customerLoc) stops = [customerLoc];
-    } else {
-      // To stores then customer
-      const orderStores = new Map();
-      if (selectedOrder.stores) orderStores.set(selectedOrder.stores.id, selectedOrder.stores);
-      selectedOrder.order_items?.forEach((item: any) => {
-        const s = item.products?.stores;
-        if (s) {
-          // Only add store if any item from this store is NOT picked up
-          const storeItems = selectedOrder.order_items.filter((oi: any) => (oi.products?.stores?.id || selectedOrder.stores?.id) === s.id);
-          const allPicked = storeItems.every((oi: any) => oi.is_picked_up);
-          if (!allPicked) {
-            orderStores.set(s.id, s);
-          }
-        }
-      });
-      
-      stops = Array.from(orderStores.values())
-        .map(s => parseLocation(s.location))
-        .filter(l => !!l);
-      
-      if (customerLoc) stops.push(customerLoc);
-    }
-
-    if (stops.length === 0) {
-      setNextRouteLine(null);
-      setRemainingRouteLine(null);
-      return;
-    }
-
-    // Fetch routes from Mappls
-    try {
-      // 1. Next Segment (Rider to Next Stop) - GREEN
-      const nextCoords = `${riderLocation.longitude},${riderLocation.latitude};${stops[0].longitude},${stops[0].latitude}`;
-      const nextUrl = `https://apis.mappls.com/advancedmaps/v1/${REST_API_KEY}/route_adv/driving/${nextCoords}?alternatives=false&steps=false&overview=full&geometries=geojson`;
-      
-      const nextResponse = await fetch(nextUrl);
-      const nextResult = await nextResponse.json();
-      if (nextResult.routes && nextResult.routes.length > 0) {
-        setNextRouteLine(nextResult.routes[0].geometry);
-      }
-
-      // 2. Remaining Segments (Next Stop to End) - BLUE
-      if (stops.length > 1) {
-        const remainingCoords = stops.map(s => `${s.longitude},${s.latitude}`).join(';');
-        const remainingUrl = `https://apis.mappls.com/advancedmaps/v1/${REST_API_KEY}/route_adv/driving/${remainingCoords}?alternatives=false&steps=false&overview=full&geometries=geojson`;
-        
-        const remResponse = await fetch(remainingUrl);
-        const remResult = await remResponse.json();
-        if (remResult.routes && remResult.routes.length > 0) {
-          setRemainingRouteLine(remResult.routes[0].geometry);
-        }
-      } else {
-        setRemainingRouteLine(null);
-      }
-      
-      // Auto zoom
-      fitToStops(stops);
-    } catch (error) {
-      console.error('Error fetching route:', error);
-    }
-  };
 
   const fitToStops = (stops: any[]) => {
     if (!cameraRef.current || !riderLocation) return;
@@ -388,9 +386,10 @@ const DeliveryMapScreen = ({ route, navigation }: any) => {
           <TouchableOpacity 
             style={styles.recenterBtn}
             onPress={() => {
-              const selectedOrder = activeOrders.find(o => o.id === orderId) || activeOrders[0];
+              const stops = stores
+                .map(s => parseLocation(s.location))
+                .filter((l): l is NonNullable<typeof l> => !!l);
               const customerLoc = parseLocation(selectedOrder?.addresses?.location);
-              const stops = stores.map(s => parseLocation(s.location)).filter(l => !!l);
               if (customerLoc) stops.push(customerLoc);
               fitToStops(stops);
             }}

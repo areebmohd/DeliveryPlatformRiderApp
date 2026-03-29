@@ -1,6 +1,5 @@
-import React, { createContext, useState, useContext, ReactNode } from 'react';
-import { Modal, View, Text, StyleSheet, TouchableOpacity, Animated, Dimensions } from 'react-native';
-import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import React, { createContext, useState, useContext, useCallback, ReactNode } from 'react';
+import { Modal, View, Text, StyleSheet, TouchableOpacity, Animated } from 'react-native';
 import { Colors, BorderRadius } from '../theme/colors';
 
 interface AlertButton {
@@ -26,7 +25,7 @@ export const CustomAlertProvider = ({ children }: { children: ReactNode }) => {
   const [options, setOptions] = useState<AlertOptions | null>(null);
   const fadeAnim = useState(new Animated.Value(0))[0];
 
-  const showAlert = (title: string, message: string, buttons?: AlertButton[]) => {
+  const showAlert = useCallback((title: string, message: string, buttons?: AlertButton[]) => {
     setOptions({ title, message, buttons });
     setVisible(true);
     Animated.timing(fadeAnim, {
@@ -34,9 +33,9 @@ export const CustomAlertProvider = ({ children }: { children: ReactNode }) => {
       duration: 200,
       useNativeDriver: true,
     }).start();
-  };
+  }, [fadeAnim]);
 
-  const hideAlert = () => {
+  const hideAlert = useCallback(() => {
     Animated.timing(fadeAnim, {
       toValue: 0,
       duration: 150,
@@ -45,14 +44,14 @@ export const CustomAlertProvider = ({ children }: { children: ReactNode }) => {
       setVisible(false);
       setOptions(null);
     });
-  };
+  }, [fadeAnim]);
 
-  const handleButtonPress = (onPress?: () => void) => {
+  const handleButtonPress = useCallback((onPress?: () => void) => {
     hideAlert();
     if (onPress) {
       setTimeout(onPress, 200);
     }
-  };
+  }, [hideAlert]);
 
   return (
     <CustomAlertContext.Provider value={{ showAlert }}>
@@ -69,7 +68,7 @@ export const CustomAlertProvider = ({ children }: { children: ReactNode }) => {
               <Text style={styles.title}>{options?.title}</Text>
               <Text style={styles.message}>{options?.message}</Text>
             </View>
-            
+
             <View style={styles.buttonWrapper}>
               {options?.buttons && options.buttons.length > 0 ? (
                 options.buttons.map((btn, index) => (
@@ -78,14 +77,14 @@ export const CustomAlertProvider = ({ children }: { children: ReactNode }) => {
                     style={[
                       styles.button,
                       index < options.buttons!.length - 1 && styles.buttonBorder,
-                      btn.style === 'destructive' && styles.destructiveButton
+                      btn.style === 'destructive' && styles.destructiveButton,
                     ]}
                     onPress={() => handleButtonPress(btn.onPress)}
                   >
                     <Text style={[
                       styles.buttonText,
-                      btn.style === 'destructive' ? styles.destructiveText : 
-                      btn.style === 'cancel' ? styles.cancelText : null
+                      btn.style === 'destructive' ? styles.destructiveText :
+                      btn.style === 'cancel' ? styles.cancelText : null,
                     ]}>
                       {btn.text}
                     </Text>
@@ -126,7 +125,7 @@ const styles = StyleSheet.create({
   alertContainer: {
     width: '100%',
     maxWidth: 320,
-    backgroundColor: '#fff',
+    backgroundColor: Colors.white,
     borderRadius: 20,
     overflow: 'hidden',
     elevation: 10,
@@ -141,8 +140,8 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 20,
-    fontWeight: 'bold',
-    color: '#212529',
+    fontWeight: '700',
+    color: Colors.text,
     textAlign: 'center',
     marginBottom: 12,
   },
@@ -170,15 +169,13 @@ const styles = StyleSheet.create({
   buttonText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#007bff',
+    color: Colors.primary,
   },
-  destructiveButton: {
-    // Optional: add subtle background for destructive
-  },
+  destructiveButton: {},
   destructiveText: {
-    color: '#dc3545',
+    color: Colors.danger,
   },
   cancelText: {
-    color: '#6c757d',
+    color: Colors.textSecondary,
   },
 });

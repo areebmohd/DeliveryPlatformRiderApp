@@ -32,7 +32,6 @@ export const BackButton = ({ onPress, color = Colors.primary }: BackButtonProps)
 const styles = StyleSheet.create({
   container: {
     marginLeft: 8,
-    marginVertical: 8,
   },
   iconContainer: {
     width: 40,

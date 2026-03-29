@@ -28,7 +28,6 @@ const AccountOption = ({ icon, label, onPress }: { icon: string; label: string; 
 const AccountScreen = ({ navigation }: { navigation: any }) => {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<any>(null);
-  const [loading, setLoading] = useState(false);
   const { showAlert } = useCustomAlert();
 
   useEffect(() => {
@@ -36,7 +35,6 @@ const AccountScreen = ({ navigation }: { navigation: any }) => {
   }, []);
 
   async function fetchData() {
-    setLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
     setUser(user);
 
@@ -49,7 +47,6 @@ const AccountScreen = ({ navigation }: { navigation: any }) => {
       if (error) throw error;
       setProfile(profileData);
     }
-    setLoading(false);
   }
 
   const handleLogout = async () => {
@@ -163,8 +160,7 @@ const styles = StyleSheet.create({
   },
   roleBadge: {
     position: 'absolute',
-    bottom: -5,
-    alignSelf: 'center',
+    bottom: -10,
     backgroundColor: Colors.success,
     paddingHorizontal: 10,
     paddingVertical: 4,
