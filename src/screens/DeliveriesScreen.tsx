@@ -64,6 +64,22 @@ const DeliveriesScreen = ({ navigation }: any) => {
         const availableIds = new Set(fetchedOrders.map(o => o.id));
         const filteredAvailable = availableOrders.filter((o: any) => !availableIds.has(o.id));
         fetchedOrders = [...fetchedOrders, ...filteredAvailable];
+
+        // Log these as "offers" for the rider to track acceptance rate
+        if (availableOrders.length > 0) {
+          const offers = availableOrders.map((o: any) => ({
+            rider_id: user.id,
+            order_id: o.id
+          }));
+          
+          // Use insert with then() to run in background without blocking UI
+          supabase
+            .from('rider_offer_logs')
+            .upsert(offers, { onConflict: 'rider_id, order_id' })
+            .then(({ error }) => {
+               if (error) console.error('Error logging offers:', error.message);
+            });
+        }
       }
 
       // Also fetch delivered/cancelled orders for history (optional, let's keep it simple)

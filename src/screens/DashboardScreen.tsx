@@ -1,10 +1,181 @@
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  ActivityIndicator,
+  RefreshControl,
+  Dimensions,
+} from 'react-native';
+import { supabase } from '../lib/supabaseClient';
+import { useCustomAlert } from '../context/CustomAlertContext';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { Colors, Spacing, Typography, BorderRadius } from '../theme/colors';
+
+const { width } = Dimensions.get('window');
+
+type Timeframe = 'daily' | 'weekly' | 'monthly';
+
+interface DashboardStats {
+  completed_deliveries: number;
+  total_earnings: number;
+  acceptance_rate: number;
+}
 
 const DashboardScreen = () => {
+  const { showAlert } = useCustomAlert();
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [timeframe, setTimeframe] = useState<Timeframe>('daily');
+  const [stats, setStats] = useState<DashboardStats | null>(null);
+
+  const fetchDashboardData = useCallback(async (selectedTimeframe: Timeframe) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const days = selectedTimeframe === 'daily' ? 1 : selectedTimeframe === 'weekly' ? 7 : 30;
+      
+      const { data, error } = await supabase.rpc('get_rider_dashboard_stats', {
+        p_rider_id: user.id,
+        days_limit: days,
+      });
+
+      if (error) throw error;
+      setStats(data as DashboardStats);
+    } catch (error: any) {
+      console.error('Error fetching dashboard data:', error.message);
+      showAlert('Error', 'Failed to fetch dashboard data. Please try again.');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [showAlert]);
+
+  useEffect(() => {
+    fetchDashboardData(timeframe);
+  }, [timeframe, fetchDashboardData]);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchDashboardData(timeframe);
+  };
+
+  const formatCurrency = (amount: number) => {
+    return `₹${Number(amount).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 1 })}`;
+  };
+
+  const StatCard = ({ title, value, icon, color, subtitle, suffix = "" }: any) => (
+    <View style={styles.statCard}>
+      <View style={[styles.iconContainer, { backgroundColor: color + '15' }]}>
+        <Icon name={icon} size={24} color={color} />
+      </View>
+      <View style={styles.statInfo}>
+        <Text style={styles.statLabel} numberOfLines={1}>{title}</Text>
+        <Text style={[styles.statValue, { color: Colors.text }]}>{value}{suffix}</Text>
+        {subtitle && <Text style={styles.statSubtitle}>{subtitle}</Text>}
+      </View>
+    </View>
+  );
+
+  const TimeframeButton = ({ label, value }: { label: string; value: Timeframe }) => (
+    <TouchableOpacity
+      style={[
+        styles.timeframeBtn,
+        timeframe === value && styles.timeframeBtnActive,
+      ]}
+      onPress={() => {
+        setLoading(true);
+        setTimeframe(value);
+      }}>
+      <Text
+        style={[
+          styles.timeframeText,
+          timeframe === value && styles.timeframeTextActive,
+        ]}>
+        {label}
+      </Text>
+    </TouchableOpacity>
+  );
+
+  if (loading && !refreshing) {
+    return (
+      <View style={styles.centered}>
+        <ActivityIndicator size="large" color={Colors.primary} />
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
-      <Text style={styles.subtitle}>Welcome back, Rider!</Text>
+      <View style={styles.header}>
+        <Text style={styles.welcomeText}>Hello, Delivery Partner!</Text>
+        <Text style={styles.dashboardSubtitle}>Track your earnings and progress</Text>
+        
+        <View style={styles.timeframeContainer}>
+          <TimeframeButton label="Daily" value="daily" />
+          <TimeframeButton label="Weekly" value="weekly" />
+          <TimeframeButton label="Monthly" value="monthly" />
+        </View>
+      </View>
+
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />
+        }>
+        
+        {/* Main Earnings Card */}
+        <View style={styles.mainFinanceCard}>
+          <View style={styles.mainFinanceContent}>
+            <Text style={styles.mainFinanceLabel}>Estimated Earnings</Text>
+            <Text style={styles.mainFinanceValue}>
+              {formatCurrency(stats?.total_earnings || 0)}
+            </Text>
+            <Text style={styles.earningsTip}>Earned from completed deliveries</Text>
+          </View>
+          <View style={styles.mainFinanceIcon}>
+            <Icon name="cash-multiple" size={40} color={Colors.white} />
+          </View>
+        </View>
+
+        {/* Stats Row */}
+        <View style={styles.statsRow}>
+          <StatCard
+            title="Completed"
+            value={stats?.completed_deliveries || 0}
+            icon="check-decagram"
+            color={Colors.success}
+            subtitle="Deliveries"
+          />
+          <StatCard
+            title="Acceptance"
+            value={stats?.acceptance_rate || 0}
+            icon="hand-okay"
+            color={Colors.primary}
+            subtitle="Rate"
+            suffix="%"
+          />
+        </View>
+
+        {/* Tip/Info Section */}
+        <View style={styles.infoCard}>
+          <View style={styles.infoIconBox}>
+             <Icon name="lightbulb-on" size={24} color={Colors.warning} />
+          </View>
+          <View style={styles.infoContent}>
+            <Text style={styles.infoTitle}>Rider Pro Tip</Text>
+            <Text style={styles.infoText}>
+              High acceptance rate helps you get priority for new available orders in your area!
+            </Text>
+          </View>
+        </View>
+        
+        <View style={styles.footerSpacer} />
+      </ScrollView>
     </View>
   );
 };
@@ -12,19 +183,172 @@ const DashboardScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: Colors.background,
+  },
+  centered: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f8f9fa',
   },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#212529',
+  header: {
+    padding: Spacing.lg,
   },
-  subtitle: {
-    fontSize: 16,
-    color: '#6c757d',
-    marginTop: 8,
+  welcomeText: {
+    ...Typography.pageTitle,
+    color: Colors.text,
+  },
+  dashboardSubtitle: {
+    ...Typography.pageSubtitle,
+    color: Colors.textSecondary,
+    marginBottom: Spacing.lg,
+  },
+  timeframeContainer: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(0,0,0,0.05)',
+    borderRadius: BorderRadius.lg,
+    padding: 3,
+  },
+  timeframeBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderRadius: BorderRadius.md,
+  },
+  timeframeBtnActive: {
+    backgroundColor: Colors.white,
+    elevation: 2,
+    shadowColor: Colors.black,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+  },
+  timeframeText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.textSecondary,
+  },
+  timeframeTextActive: {
+    color: Colors.primary,
+  },
+  scrollContent: {
+    padding: Spacing.md,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    gap: Spacing.md,
+    marginBottom: Spacing.md,
+  },
+  statCard: {
+    flex: 1,
+    backgroundColor: Colors.white,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    elevation: 2,
+    shadowColor: Colors.black,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+  },
+  iconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: BorderRadius.md,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+  },
+  statInfo: {
+    flex: 1,
+  },
+  statLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.textSecondary,
+    textTransform: 'uppercase',
+  },
+  statValue: {
+    fontSize: 20,
+    fontWeight: '800',
+    marginTop: 2,
+  },
+  statSubtitle: {
+    fontSize: 10,
+    fontWeight: '500',
+    color: Colors.textSecondary,
+  },
+  mainFinanceCard: {
+    backgroundColor: Colors.primary,
+    borderRadius: BorderRadius.xl,
+    padding: Spacing.xl,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.lg,
+    elevation: 6,
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+  },
+  mainFinanceContent: {
+    flex: 1,
+  },
+  mainFinanceLabel: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  mainFinanceValue: {
+    color: Colors.white,
+    fontSize: 34,
+    fontWeight: '900',
+    marginTop: 4,
+  },
+  earningsTip: {
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: 11,
+    marginTop: 4,
+    fontStyle: 'italic',
+  },
+  mainFinanceIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  infoCard: {
+    backgroundColor: Colors.white,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: Spacing.sm,
+    borderLeftWidth: 4,
+    borderLeftColor: Colors.warning,
+  },
+  infoIconBox: {
+    marginRight: 12,
+  },
+  infoContent: {
+    flex: 1,
+  },
+  infoTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: Colors.text,
+  },
+  infoText: {
+    fontSize: 13,
+    color: Colors.textSecondary,
+    marginTop: 2,
+    lineHeight: 18,
+  },
+  footerSpacer: {
+    height: 60,
   },
 });
 
