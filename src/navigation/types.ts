@@ -8,4 +8,5 @@ export type AuthStackParamList = {
   MainTabs: undefined;
   Notifications: undefined;
   DeliveryMap: { orderId: string };
+  Payments: undefined;
 };

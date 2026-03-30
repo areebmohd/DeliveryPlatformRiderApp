@@ -105,7 +105,7 @@ const AccountScreen = ({ navigation }: { navigation: any }) => {
           label="Edit Profile"
           onPress={() => navigation.navigate('ProfileSetup', { isEditing: true })}
         />
-        <AccountOption icon="credit-card-outline" label="Payments" onPress={() => {}} />
+        <AccountOption icon="credit-card-outline" label="Payments" onPress={() => navigation.navigate('Payments')} />
         <AccountOption
           icon="bell-outline"
           label="Notifications"

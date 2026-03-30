@@ -4,6 +4,7 @@ import BottomTabNavigator from './BottomTabNavigator';
 import ProfileSetupScreen from '../screens/ProfileSetupScreen';
 import NotificationsScreen from '../screens/NotificationsScreen';
 import DeliveryMapScreen from '../screens/DeliveryMapScreen';
+import PaymentsScreen from '../screens/PaymentsScreen';
 import { AuthStackParamList } from './types';
 import { useRiderLocation } from '../hooks/useRiderLocation';
 import { useProfileCheck } from '../hooks/useProfileCheck';
@@ -61,6 +62,11 @@ const MainNavigator = ({ userId }: { userId?: string }) => {
         name="DeliveryMap" 
         component={DeliveryMapScreen} 
         options={{ title: 'Delivery Map' }} 
+      />
+      <Stack.Screen 
+        name="Payments" 
+        component={PaymentsScreen} 
+        options={{ title: 'My Earnings' }} 
       />
     </Stack.Navigator>
   );
