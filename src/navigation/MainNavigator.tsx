@@ -6,14 +6,24 @@ import NotificationsScreen from '../screens/NotificationsScreen';
 import DeliveryMapScreen from '../screens/DeliveryMapScreen';
 import { AuthStackParamList } from './types';
 import { useRiderLocation } from '../hooks/useRiderLocation';
+import { useProfileCheck } from '../hooks/useProfileCheck';
 import { Colors } from '../theme/colors';
 import { BackButton } from '../components/ui/BackButton';
+import { useEffect } from 'react';
 
 const Stack = createNativeStackNavigator<AuthStackParamList>();
 
 const MainNavigator = ({ userId }: { userId?: string }) => {
   // Start location tracking when rider is in the main navigator
   useRiderLocation(userId);
+
+  const { checkProfileCompleteness } = useProfileCheck();
+
+  useEffect(() => {
+    if (userId) {
+      checkProfileCompleteness(userId);
+    }
+  }, [userId, checkProfileCompleteness]);
 
   return (
     <Stack.Navigator

@@ -14,6 +14,7 @@ import { Colors, Spacing, BorderRadius } from '../theme/colors';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCustomAlert } from '../context/CustomAlertContext';
+import { useProfileCheck } from '../hooks/useProfileCheck';
 
 const DeliveriesScreen = ({ navigation }: any) => {
   const insets = useSafeAreaInsets();
@@ -23,6 +24,7 @@ const DeliveriesScreen = ({ navigation }: any) => {
   const [sections, setSections] = useState<any[]>([]);
   const [otpInputs, setOtpInputs] = useState<{ [key: string]: string }>({});
   const { showAlert } = useCustomAlert();
+  const { checkProfileCompleteness } = useProfileCheck();
 
   const fetchOrders = useCallback(async () => {
     try {
@@ -367,35 +369,8 @@ const DeliveriesScreen = ({ navigation }: any) => {
       if (!user) return;
 
       // Check profile completeness before accepting
-      const [profileRes, addressRes, riderRes] = await Promise.all([
-        supabase.from('profiles').select('full_name, phone, role, upi_id').eq('id', user.id).single(),
-        supabase.from('addresses').select('address_line, city, state, pincode').eq('user_id', user.id).eq('is_default', true).maybeSingle(),
-        supabase.from('rider_profiles').select('vehicle_type, vehicle_number').eq('profile_id', user.id).maybeSingle(),
-      ]);
-
-      const p = profileRes.data;
-      const a = addressRes.data;
-      const r = riderRes.data;
-
-      const isProfileComplete =
-        !!p?.full_name?.trim() && !!p?.phone?.trim() && !!p?.upi_id?.trim() && p?.role === 'rider' &&
-        !!a?.address_line?.trim() && !!a?.city?.trim() && !!a?.state?.trim() && !!a?.pincode?.trim() &&
-        !!r?.vehicle_type?.trim() && !!r?.vehicle_number?.trim();
-
-      if (!isProfileComplete) {
-        showAlert(
-          'Profile Incomplete',
-          'Fill your complete information in Profile screen to accept delivery.',
-          [
-            {
-              text: 'Edit Profile',
-              onPress: () => navigation.navigate('ProfileSetup', { isEditing: true }),
-            },
-            { text: 'Not Now', style: 'cancel' },
-          ]
-        );
-        return;
-      }
+      const isProfileComplete = await checkProfileCompleteness(user.id);
+      if (!isProfileComplete) return;
 
       const { error } = await supabase
         .from('orders')
