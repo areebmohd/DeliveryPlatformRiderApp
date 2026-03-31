@@ -133,7 +133,7 @@ const PaymentsScreen = ({ navigation }: any) => {
                   <View style={styles.cardHeader}>
                     <View>
                       <Text style={[styles.statusLabel, { color: data.status === 'sent' ? Colors.success : Colors.textSecondary }]}>
-                        {data.status === 'sent' ? 'Payout Processed' : data.isToday ? 'Earning in progress...' : 'Pending Settlement'}
+                        {data.status === 'sent' ? 'Paid' : data.isToday ? 'Earning in progress...' : 'Pending Settlement'}
                       </Text>
                     </View>
                     <Text style={[styles.amountText, { color: data.status === 'sent' ? Colors.success : Colors.text }]}>₹{data.total.toFixed(2)}</Text>

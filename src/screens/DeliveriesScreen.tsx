@@ -253,13 +253,25 @@ const DeliveriesScreen = ({ navigation }: any) => {
               {group.items.length > 0 && (
                 <View style={styles.productList}>
                   {group.items.map((item: any) => (
-                    <View key={item.id} style={styles.productItem}>
-                      <Text style={styles.productName}>{item.product_name} x {item.quantity}</Text>
-                      <View style={styles.productInfoRow}>
-                        {item.is_picked_up && (
-                          <Icon name="check-circle" size={14} color={Colors.success} style={{ marginRight: 4 }} />
-                        )}
-                        <Text style={styles.productPrice}>₹{item.product_price * item.quantity}</Text>
+                    <View key={item.id} style={styles.productItemContainer}>
+                      <View style={styles.productItem}>
+                        <Text style={styles.productName}>
+                          {item.product_name}
+                          {item.selected_options && Object.keys(item.selected_options).length > 0 && (
+                            <Text style={styles.itemOptionsText}>
+                              {` (${Object.entries(item.selected_options)
+                                .map(([k, v]) => `${v}`)
+                                .join(', ')})`}
+                            </Text>
+                          )}
+                          {' '}x {item.quantity}
+                        </Text>
+                        <View style={styles.productInfoRow}>
+                          {item.is_picked_up && (
+                            <Icon name="check-circle" size={14} color={Colors.success} style={{ marginRight: 4 }} />
+                          )}
+                          <Text style={styles.productPrice}>₹{item.product_price * item.quantity}</Text>
+                        </View>
                       </View>
                     </View>
                   ))}
@@ -646,14 +658,49 @@ const styles = StyleSheet.create({
     padding: Spacing.sm,
     borderRadius: BorderRadius.md,
   },
+  productItemContainer: {
+    marginBottom: 8,
+  },
   productItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 4,
+  },
+  optionsBadgeContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 4,
+    marginTop: 4,
+  },
+  optionBadge: {
+    flexDirection: 'row',
+    backgroundColor: '#F2F2F7',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+    alignItems: 'center',
+  },
+  optionBadgeLabel: {
+    fontSize: 9,
+    color: Colors.textSecondary,
+    fontWeight: '700',
+    marginRight: 2,
+  },
+  optionBadgeValue: {
+    fontSize: 9,
+    color: Colors.text,
+    fontWeight: '800',
   },
   productName: {
     fontSize: 14,
     color: Colors.text,
+    fontWeight: '700',
+  },
+  itemOptionsText: {
+    fontSize: 12,
+    color: Colors.primary,
+    fontWeight: '600',
   },
   productPrice: {
     fontSize: 14,
