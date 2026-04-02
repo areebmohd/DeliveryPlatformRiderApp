@@ -111,7 +111,11 @@ const AccountScreen = ({ navigation }: { navigation: any }) => {
           label="Notifications"
           onPress={() => navigation.navigate('Notifications')}
         />
-        <AccountOption icon="headset" label="Rider Support" onPress={() => {}} />
+        <AccountOption 
+          icon="headset" 
+          label="Rider Support" 
+          onPress={() => navigation.navigate('Support')} 
+        />
       </View>
 
       {/* Footer */}

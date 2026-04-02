@@ -5,6 +5,7 @@ import ProfileSetupScreen from '../screens/ProfileSetupScreen';
 import NotificationsScreen from '../screens/NotificationsScreen';
 import DeliveryMapScreen from '../screens/DeliveryMapScreen';
 import PaymentsScreen from '../screens/PaymentsScreen';
+import SupportScreen from '../screens/SupportScreen';
 import { AuthStackParamList } from './types';
 import { useRiderLocation } from '../hooks/useRiderLocation';
 import { useProfileCheck } from '../hooks/useProfileCheck';
@@ -67,6 +68,11 @@ const MainNavigator = ({ userId }: { userId?: string }) => {
         name="Payments" 
         component={PaymentsScreen} 
         options={{ title: 'My Earnings' }} 
+      />
+      <Stack.Screen 
+        name="Support" 
+        component={SupportScreen} 
+        options={{ headerShown: false }} 
       />
     </Stack.Navigator>
   );
