@@ -312,9 +312,6 @@ const DeliveriesScreen = ({ navigation }: any) => {
                                     <Icon name="check-circle" size={14} color={Colors.success} style={{ marginRight: 4 }} />
                                   )}
                                   <View style={{ alignItems: 'flex-end' }}>
-                                    {hasDiscount && storeOffer?.type === 'discount' && (
-                                      <Text style={styles.strikePrice}>₹{Math.round(item.product_price * item.quantity)}</Text>
-                                    )}
                                     <Text style={styles.productPrice}>₹{Math.round(discountedPrice * item.quantity)}</Text>
                                   </View>
                                 </View>
@@ -512,8 +509,7 @@ const DeliveriesScreen = ({ navigation }: any) => {
       const { error } = await supabase
         .from('orders')
         .update({ 
-          status: 'delivered',
-          payment_status: 'verified'
+          status: 'delivered'
         })
         .eq('id', orderId);
 
@@ -625,7 +621,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: Spacing.sm,
+    marginBottom: 4,
   },
   orderNumber: {
     fontSize: 16,
@@ -702,7 +698,7 @@ const styles = StyleSheet.create({
   divider: {
     height: 1,
     backgroundColor: Colors.border,
-    marginVertical: Spacing.md,
+    marginVertical: 8,
   },
   section: {
     marginBottom: Spacing.sm,
@@ -981,10 +977,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   cardFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
-    marginTop: Spacing.sm,
+    marginTop: 4,
   },
   footerInfo: {
     flex: 1,
@@ -1010,18 +1003,21 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   totalContainer: {
-    alignItems: 'flex-end',
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    width: '100%',
   },
   totalLabel: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '800',
     color: Colors.textSecondary,
     textTransform: 'uppercase',
   },
   grandTotal: {
-    fontSize: 24,
+    fontSize: 26,
     fontWeight: '900',
-    color: Colors.text,
+    color: Colors.primary,
   },
 });
 
