@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   TextInput,
   RefreshControl,
+  Linking,
 } from 'react-native';
 import { supabase } from '../lib/supabaseClient';
 import { Colors, Spacing, BorderRadius } from '../theme/colors';
@@ -158,6 +159,22 @@ const DeliveriesScreen = ({ navigation }: any) => {
     const isHistory = order.status === 'delivered' || order.status === 'cancelled';
     const isAvailable = order.rider_id === null;
 
+    let statusLabel = '';
+    let statusColor = Colors.text;
+    if (order.status === 'waiting_for_pickup') {
+      statusLabel = 'WAITING FOR PICKUP';
+      statusColor = Colors.warning;
+    } else if (order.status === 'picked_up') {
+      statusLabel = 'PICKED UP';
+      statusColor = Colors.primary;
+    } else if (order.status === 'delivered') {
+      statusLabel = 'DELIVERED';
+      statusColor = Colors.success;
+    } else if (order.status === 'cancelled') {
+      statusLabel = 'CANCELLED';
+      statusColor = Colors.danger;
+    }
+
     return (
       <View key={order.id} style={[styles.orderCard, isHistory && styles.historyCard]}>
         <View style={styles.orderHeader}>
@@ -173,14 +190,9 @@ const DeliveriesScreen = ({ navigation }: any) => {
               ]}>
                 <Text style={[
                   styles.statusText,
-                  order.status === 'delivered' ? styles.successText : 
-                  order.status === 'cancelled' ? styles.errorText : 
-                  order.status === 'picked_up' ? styles.pickedUpStatusText : 
-                  styles.waitingText
+                  { color: statusColor }
                 ]}>
-                  {order.status === 'delivered' ? 'DELIVERED' : 
-                   order.status === 'cancelled' ? 'CANCELLED' : 
-                   (order.status === 'picked_up' ? 'PICKED UP' : 'WAITING FOR PICKUP')}
+                  {statusLabel}
                 </Text>
               </View>
 
@@ -219,7 +231,7 @@ const DeliveriesScreen = ({ navigation }: any) => {
 
         {/* Store Details (Grouped) */}
         {(() => {
-          const groups: { [key: string]: { id: string, name: string, address: string, items: any[] } } = {};
+          const groups: { [key: string]: { id: string, name: string, address: string, phone?: string, items: any[] } } = {};
           order.order_items?.forEach((oi: any) => {
             const store = oi.products?.stores || (Array.isArray(oi.products) ? oi.products[0]?.stores : null) || order.stores;
             const sId = store?.id || 'unknown';
@@ -228,6 +240,7 @@ const DeliveriesScreen = ({ navigation }: any) => {
                 id: sId,
                 name: store?.name || 'Unknown Store',
                 address: store?.address || 'N/A',
+                phone: store?.phone,
                 items: []
               };
             }
@@ -242,6 +255,7 @@ const DeliveriesScreen = ({ navigation }: any) => {
               id: sId,
               name: s.name || 'Unknown Store',
               address: s.address || 'N/A',
+              phone: s.phone,
               items: []
             };
           }
@@ -254,6 +268,13 @@ const DeliveriesScreen = ({ navigation }: any) => {
               </View>
               <Text style={styles.storeName}>{group.name}</Text>
               <Text style={styles.addressText}>{group.address}</Text>
+              {group.phone && (
+                <TouchableOpacity onPress={() => Linking.openURL(`tel:${group.phone}`)}>
+                  <Text style={styles.phoneText}>
+                    <Icon name="phone" size={14} color={Colors.primary} /> {group.phone}
+                  </Text>
+                </TouchableOpacity>
+              )}
 
               {/* Find offers for this specific store */}
               {(() => {
@@ -265,10 +286,12 @@ const DeliveriesScreen = ({ navigation }: any) => {
                     {group.items.length > 0 && (
                       <View style={styles.productList}>
                         {group.items.map((item: any) => {
-                          const hasDiscount = storeOffer?.type === 'discount';
-                          const discountedPrice = hasDiscount 
-                            ? item.product_price * (1 - storeOffer.amount / 100) 
-                            : item.product_price;
+                          const hasDiscount = storeOffer?.type === 'discount' || storeOffer?.type === 'free_cash';
+                          let discountedPrice = item.product_price;
+                          
+                          if (storeOffer?.type === 'discount') {
+                            discountedPrice = item.product_price * (1 - storeOffer.amount / 100);
+                          }
 
                           return (
                             <View key={item.id} style={styles.productItemContainer}>
@@ -289,6 +312,9 @@ const DeliveriesScreen = ({ navigation }: any) => {
                                     <Icon name="check-circle" size={14} color={Colors.success} style={{ marginRight: 4 }} />
                                   )}
                                   <View style={{ alignItems: 'flex-end' }}>
+                                    {hasDiscount && storeOffer?.type === 'discount' && (
+                                      <Text style={styles.strikePrice}>₹{Math.round(item.product_price * item.quantity)}</Text>
+                                    )}
                                     <Text style={styles.productPrice}>₹{Math.round(discountedPrice * item.quantity)}</Text>
                                   </View>
                                 </View>
@@ -348,9 +374,11 @@ const DeliveriesScreen = ({ navigation }: any) => {
           </View>
           <Text style={styles.customerName}>{order.addresses?.receiver_name}</Text>
           <Text style={styles.addressText}>{order.addresses?.address_line}, {order.addresses?.city}</Text>
-          <Text style={styles.phoneText}>
-             <Icon name="phone" size={14} /> {order.addresses?.receiver_phone}
-          </Text>
+          <TouchableOpacity onPress={() => Linking.openURL(`tel:${order.addresses?.receiver_phone}`)}>
+            <Text style={styles.phoneText}>
+               <Icon name="phone" size={14} /> {order.addresses?.receiver_phone}
+            </Text>
+          </TouchableOpacity>
 
           {order.rider_id && order.status === 'picked_up' && (
             <View style={styles.otpSection}>
@@ -384,6 +412,15 @@ const DeliveriesScreen = ({ navigation }: any) => {
               </View>
             </View>
           )}
+
+          <View style={styles.divider} />
+          
+          <View style={styles.cardFooter}>
+             <View style={styles.totalContainer}>
+                <Text style={styles.totalLabel}>Total Price</Text>
+                <Text style={styles.grandTotal}>₹{Number(order.total_amount).toFixed(0)}</Text>
+             </View>
+          </View>
         </View>
       </View>
     );
@@ -942,6 +979,49 @@ const styles = StyleSheet.create({
     color: Colors.success,
     fontWeight: '700',
     fontSize: 12,
+  },
+  cardFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    marginTop: Spacing.sm,
+  },
+  footerInfo: {
+    flex: 1,
+    marginRight: Spacing.md,
+  },
+  breakdownContainer: {
+    gap: 4,
+  },
+  breakdownRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  breakdownLabel: {
+    fontSize: 11,
+    color: Colors.textSecondary,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+  },
+  breakdownValue: {
+    fontSize: 11,
+    color: Colors.text,
+    fontWeight: '800',
+  },
+  totalContainer: {
+    alignItems: 'flex-end',
+  },
+  totalLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: Colors.textSecondary,
+    textTransform: 'uppercase',
+  },
+  grandTotal: {
+    fontSize: 24,
+    fontWeight: '900',
+    color: Colors.text,
   },
 });
 

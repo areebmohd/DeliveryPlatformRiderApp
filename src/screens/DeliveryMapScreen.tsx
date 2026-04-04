@@ -146,7 +146,7 @@ const DeliveryMapScreen = ({ route, navigation }: any) => {
           )
         `)
         .or(`rider_id.eq.${user.id},id.eq.${orderId}`)
-        .in('status', ['pending_verification', 'accepted', 'preparing', 'ready', 'picked_up']);
+        .in('status', ['waiting_for_pickup', 'picked_up']);
 
       if (error) throw error;
       
