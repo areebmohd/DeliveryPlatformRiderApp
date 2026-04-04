@@ -361,7 +361,7 @@ const DeliveryMapScreen = ({ route, navigation }: any) => {
       {/* Selected Info Card */}
       {selectedOrder && (
         <View style={[styles.infoCard, { paddingBottom: insets.bottom + Spacing.md }]}>
-          <Text style={styles.selectedOrderTitle}>Focus: Order #{selectedOrder.order_number}</Text>
+          <Text style={styles.selectedOrderTitle}>Focus: #{selectedOrder.order_number}</Text>
           
           {selectedOrder.status !== 'picked_up' ? (
             <View style={styles.infoRow}>

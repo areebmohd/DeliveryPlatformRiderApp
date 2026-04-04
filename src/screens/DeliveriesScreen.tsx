@@ -162,36 +162,41 @@ const DeliveriesScreen = ({ navigation }: any) => {
       <View key={order.id} style={[styles.orderCard, isHistory && styles.historyCard]}>
         <View style={styles.orderHeader}>
           <View>
-            <Text style={styles.orderNumber}>Order #{order.order_number}</Text>
-            <View style={[
-              styles.statusBadge, 
-              order.status === 'delivered' ? styles.successBadge : 
-              order.status === 'cancelled' ? styles.errorBadge : 
-              isAvailable ? styles.availableBadge : null
-            ]}>
-              <Text style={[
-                styles.statusText,
-                (order.status === 'delivered' || order.status === 'cancelled' || isAvailable) ? styles.whiteText : null
+            <Text style={styles.orderNumber}>#{order.order_number}</Text>
+            <View style={styles.badgeContainer}>
+              <View style={[
+                styles.statusBadge, 
+                order.status === 'delivered' ? styles.successBadge : 
+                order.status === 'cancelled' ? styles.errorBadge : 
+                order.status === 'picked_up' ? styles.pickedUpStatusBadge : 
+                styles.waitingBadge
               ]}>
-                {isAvailable ? 'AVAILABLE (NEW)' : order.status.replace('_', ' ').toUpperCase()}
-              </Text>
-            </View>
-            <View style={[
-              styles.paymentBadge,
-              order.payment_status === 'verified' ? styles.paidBadge : styles.unpaidBadge
-            ]}>
-              <Icon 
-                name={order.payment_status === 'verified' ? "check-circle" : "clock-outline"} 
-                size={12} 
-                color={order.payment_status === 'verified' ? Colors.success : Colors.textSecondary} 
-              />
-              <Text style={[
-                styles.paymentBadgeText,
-                order.payment_status === 'verified' ? { color: Colors.success } : { color: Colors.textSecondary }
+                <Text style={[
+                  styles.statusText,
+                  order.status === 'delivered' ? styles.successText : 
+                  order.status === 'cancelled' ? styles.errorText : 
+                  order.status === 'picked_up' ? styles.pickedUpStatusText : 
+                  styles.waitingText
+                ]}>
+                  {order.status === 'delivered' ? 'DELIVERED' : 
+                   order.status === 'cancelled' ? 'CANCELLED' : 
+                   (order.status === 'picked_up' ? 'PICKED UP' : 'WAITING FOR PICKUP')}
+                </Text>
+              </View>
+
+              <View style={[
+                styles.paymentBadge,
+                order.payment_status === 'verified' ? styles.paidBadge : styles.unpaidBadge
               ]}>
-                {order.payment_status === 'verified' ? 'PAID' : (order.payment_method === 'pay_on_delivery' ? 'COD' : (order.payment_method === 'pay_online' ? 'ONLINE' : 'PENDING'))}
-              </Text>
+                <Text style={[
+                  styles.paymentBadgeText,
+                  order.payment_status === 'verified' ? styles.paidText : styles.unpaidText
+                ]}>
+                  {order.payment_status === 'verified' ? 'PAID' : (order.payment_method === 'pay_on_delivery' ? 'POD' : (order.payment_method === 'pay_online' ? 'ONLINE' : 'PENDING'))}
+                </Text>
+              </View>
             </View>
+
             {order.payment_method === 'pay_online' && order.utr_number && (
               <Text style={styles.paymentMetaText}>UTR: {order.utr_number}</Text>
             )}
@@ -249,34 +254,53 @@ const DeliveriesScreen = ({ navigation }: any) => {
               </View>
               <Text style={styles.storeName}>{group.name}</Text>
               <Text style={styles.addressText}>{group.address}</Text>
-              
-              {group.items.length > 0 && (
-                <View style={styles.productList}>
-                  {group.items.map((item: any) => (
-                    <View key={item.id} style={styles.productItemContainer}>
-                      <View style={styles.productItem}>
-                        <Text style={styles.productName}>
-                          {item.product_name}
-                          {item.selected_options && Object.keys(item.selected_options).length > 0 && (
-                            <Text style={styles.itemOptionsText}>
-                              {` (${Object.entries(item.selected_options)
-                                .map(([k, v]) => `${v}`)
-                                .join(', ')})`}
-                            </Text>
-                          )}
-                          {' '}x {item.quantity}
-                        </Text>
-                        <View style={styles.productInfoRow}>
-                          {item.is_picked_up && (
-                            <Icon name="check-circle" size={14} color={Colors.success} style={{ marginRight: 4 }} />
-                          )}
-                          <Text style={styles.productPrice}>₹{item.product_price * item.quantity}</Text>
-                        </View>
+
+              {/* Find offers for this specific store */}
+              {(() => {
+                const storeOffer = order.applied_offers?.[group.id];
+                const deliveryOffer = order.applied_offers?.[`${group.id}_delivery` || ''];
+                
+                return (
+                  <>
+                    {group.items.length > 0 && (
+                      <View style={styles.productList}>
+                        {group.items.map((item: any) => {
+                          const hasDiscount = storeOffer?.type === 'discount';
+                          const discountedPrice = hasDiscount 
+                            ? item.product_price * (1 - storeOffer.amount / 100) 
+                            : item.product_price;
+
+                          return (
+                            <View key={item.id} style={styles.productItemContainer}>
+                              <View style={styles.productItem}>
+                                <Text style={styles.productName}>
+                                  {item.product_name}
+                                  {item.selected_options && Object.keys(item.selected_options).length > 0 && (
+                                    <Text style={styles.itemOptionsText}>
+                                      {` (${Object.entries(item.selected_options)
+                                        .map(([k, v]) => `${v}`)
+                                        .join(', ')})`}
+                                    </Text>
+                                  )}
+                                  {' '}x {item.quantity}
+                                </Text>
+                                <View style={styles.productInfoRow}>
+                                  {item.is_picked_up && (
+                                    <Icon name="check-circle" size={14} color={Colors.success} style={{ marginRight: 4 }} />
+                                  )}
+                                  <View style={{ alignItems: 'flex-end' }}>
+                                    <Text style={styles.productPrice}>₹{Math.round(discountedPrice * item.quantity)}</Text>
+                                  </View>
+                                </View>
+                              </View>
+                            </View>
+                          );
+                        })}
                       </View>
-                    </View>
-                  ))}
-                </View>
-              )}
+                    )}
+                  </>
+                );
+              })()}
 
               {/* Store-level Pickup Button */}
               {order.rider_id && !isHistory && order.status !== 'delivered' && order.status !== 'cancelled' && (
@@ -295,8 +319,7 @@ const DeliveriesScreen = ({ navigation }: any) => {
                       style={styles.storePickupBtn}
                       onPress={() => handleStorePickUp(order.id, group.id || Object.keys(groups).find(key => groups[key] === group))}
                     >
-                      <Icon name="package-variant-closed" size={16} color={Colors.dark} />
-                      <Text style={styles.storePickupBtnText}>Mark Picked Up from {group.name}</Text>
+                      <Text style={styles.storePickupBtnText}>Mark Picked Up</Text>
                     </TouchableOpacity>
                   );
                 })()
@@ -335,8 +358,9 @@ const DeliveriesScreen = ({ navigation }: any) => {
                 <View style={styles.paymentAlert}>
                   <Icon name="cash-multiple" size={24} color={Colors.warning} />
                   <View style={styles.paymentAlertTextContainer}>
-                    <Text style={styles.paymentAlertTitle}>COLLECT CASH</Text>
+                    <Text style={styles.paymentAlertTitle}>COLLECT FROM CUSTOMER</Text>
                     <Text style={styles.paymentAlertAmount}>₹{order.total_amount}</Text>
+                    <Text style={styles.paymentAlertNote}>(Final Total After All Offers)</Text>
                   </View>
                 </View>
               )}
@@ -570,28 +594,56 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: Colors.text,
+    marginBottom: 2,
+  },
+  badgeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 4,
   },
   statusBadge: {
-    backgroundColor: Colors.primaryLight,
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 4,
-    marginTop: 4,
     alignSelf: 'flex-start',
   },
   successBadge: {
-    backgroundColor: Colors.success,
+    backgroundColor: '#D1FAE5', // Emerald 100
+    borderColor: '#A7F3D0', // Emerald 200
+    borderWidth: 1,
   },
   errorBadge: {
-    backgroundColor: Colors.danger,
+    backgroundColor: '#FFE4E6', // Rose 100
+    borderColor: '#FECDD3', // Rose 200
+    borderWidth: 1,
   },
-  availableBadge: {
-    backgroundColor: Colors.warning,
+  pickedUpStatusBadge: {
+    backgroundColor: '#E0F2FE', // Sky 100
+    borderColor: '#BAE6FD', // Sky 200
+    borderWidth: 1,
+  },
+  waitingBadge: {
+    backgroundColor: '#FEF3C7', // Amber 100
+    borderColor: '#FDE68A', // Amber 200
+    borderWidth: 1,
   },
   statusText: {
     fontSize: 10,
-    fontWeight: 'bold',
-    color: Colors.primary,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+  },
+  successText: {
+    color: '#065F46', // Emerald 800
+  },
+  errorText: {
+    color: '#9F1239', // Rose 800
+  },
+  pickedUpStatusText: {
+    color: '#075985', // Sky 800
+  },
+  waitingText: {
+    color: '#92400E', // Amber 800
   },
   whiteText: {
     color: Colors.white,
@@ -704,8 +756,40 @@ const styles = StyleSheet.create({
   },
   productPrice: {
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: '800',
     color: Colors.text,
+  },
+  strikePrice: {
+    fontSize: 11,
+    color: Colors.textSecondary,
+    textDecorationLine: 'line-through',
+    marginBottom: -2,
+  },
+  offerBreakdown: {
+    marginTop: Spacing.sm,
+    backgroundColor: '#F0FFF4',
+    padding: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#C6F6D5',
+  },
+  offerHeader: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#2F855A',
+    textTransform: 'uppercase',
+    marginBottom: 4,
+  },
+  offerItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 2,
+  },
+  offerText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#276749',
   },
   acceptBtn: {
     backgroundColor: Colors.warning,
@@ -758,9 +842,7 @@ const styles = StyleSheet.create({
   paymentBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    marginTop: 6,
-    paddingHorizontal: 6,
+    paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 4,
     alignSelf: 'flex-start',
@@ -769,16 +851,24 @@ const styles = StyleSheet.create({
     borderColor: '#e9ecef',
   },
   paidBadge: {
-    backgroundColor: '#e6fffa',
-    borderColor: '#b2f5ea',
+    backgroundColor: '#D1FAE5',
+    borderColor: '#A7F3D0',
+    borderWidth: 1,
   },
   unpaidBadge: {
-    backgroundColor: '#fffaf0',
-    borderColor: '#feebc8',
+    backgroundColor: '#FFF1F2', // Rose 50
+    borderColor: '#FECDD3',
+  },
+  paidText: {
+    color: '#065F46',
+  },
+  unpaidText: {
+    color: '#9F1239',
   },
   paymentBadgeText: {
     fontSize: 10,
     fontWeight: '900',
+    letterSpacing: 0.5,
   },
   paymentMetaText: {
     fontSize: 10,
@@ -797,6 +887,12 @@ const styles = StyleSheet.create({
     borderColor: Colors.warning,
     marginBottom: 16,
     gap: 12,
+  },
+  paymentAlertNote: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: Colors.textSecondary,
+    marginTop: 2,
   },
   paymentAlertTextContainer: {
     flex: 1,
