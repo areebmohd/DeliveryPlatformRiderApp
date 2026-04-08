@@ -76,3 +76,9 @@ yarn-error.log
 
 # Environment variables
 .env
+.env.local
+
+# Android Secrets
+android/app/google-services.json
+*.keystore
+!debug.keystore

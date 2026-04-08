@@ -9,6 +9,8 @@ import AuthNavigator from './src/navigation/AuthNavigator';
 import { CustomAlertProvider } from './src/context/CustomAlertContext';
 import { Colors } from './src/theme/colors';
 
+import { NotificationProvider } from './src/context/NotificationContext';
+
 function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [initialLoading, setInitialLoading] = useState(true);
@@ -36,13 +38,15 @@ function App() {
   return (
     <SafeAreaProvider>
       <CustomAlertProvider>
-        <NavigationContainer>
-          {session?.user ? (
-            <MainNavigator userId={session.user.id} />
-          ) : (
-            <AuthNavigator />
-          )}
-        </NavigationContainer>
+        <NotificationProvider userId={session?.user?.id}>
+          <NavigationContainer>
+            {session?.user ? (
+              <MainNavigator userId={session.user.id} />
+            ) : (
+              <AuthNavigator />
+            )}
+          </NavigationContainer>
+        </NotificationProvider>
       </CustomAlertProvider>
     </SafeAreaProvider>
   );
