@@ -14,8 +14,8 @@ import { Colors, Spacing, BorderRadius } from '../theme/colors';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
 const { width } = Dimensions.get('window');
-const SUPPORT_EMAIL = 'support@deliveryplatform.com';
-const SUPPORT_PHONE = '+919876543210';
+const SUPPORT_EMAIL = 'zorodeliveryapp@gmail.com';
+const SUPPORT_PHONE = '+91 7534846938';
 
 const SupportActionCard = ({ 
   icon, 
