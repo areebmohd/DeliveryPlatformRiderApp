@@ -21,6 +21,7 @@ type Props = NativeStackScreenProps<AuthStackParamList, 'Login'>;
 const LoginScreen = ({ navigation }: Props) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const { showAlert } = useCustomAlert();
 
@@ -32,12 +33,54 @@ const LoginScreen = ({ navigation }: Props) => {
 
     setLoading(true);
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: email,
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+        email: email.toLowerCase().trim(),
         password: password,
       });
 
-      if (error) showAlert('Login failed', error.message);
+      if (authError) {
+        if (authError.message.toLowerCase().includes('email not confirmed')) {
+          // Send OTP and navigate to verification
+          try {
+            await supabase.auth.resend({
+              type: 'signup',
+              email: email.toLowerCase().trim(),
+            });
+            showAlert('Verification Required', 'Your email is not verified. A new code has been sent.');
+            navigation.navigate('VerifyEmailOTP', { email: email.toLowerCase().trim() });
+          } catch (resendError: any) {
+            showAlert('Login failed', resendError.message || authError.message);
+          }
+        } else {
+          showAlert('Login failed', authError.message);
+        }
+        setLoading(false);
+        return;
+      }
+
+      if (authData.user) {
+        // Verify role
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', authData.user.id)
+          .single();
+
+        if (profileError) {
+          console.error('Error fetching profile:', profileError);
+          // If profile doesn't exist, it might be a brand new user, let them through to setup
+        } else if (profile && profile.role && profile.role !== 'rider') {
+          // Block access for non-rider roles
+          await supabase.auth.signOut();
+          showAlert(
+            'Access Denied',
+            `This account is registered as a ${profile.role}. One email can only be used for one account type. Please use a different email or log in to the appropriate app.`
+          );
+          setLoading(false);
+          return;
+        }
+      }
+
     } catch (err) {
       showAlert('Login Error', 'An unexpected error occurred');
     }
@@ -52,7 +95,7 @@ const LoginScreen = ({ navigation }: Props) => {
       <StatusBar backgroundColor={Colors.background} barStyle="dark-content" />
       <View style={styles.inner}>
         <View style={styles.header}>
-          <Text style={styles.logoText}>Rider App</Text>
+          <Text style={styles.logoText}>Zoro Rider App</Text>
           <Text style={styles.subtitle}>Welcome back, login to start delivery</Text>
         </View>
 
@@ -72,15 +115,23 @@ const LoginScreen = ({ navigation }: Props) => {
 
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Password</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Enter your password"
-              placeholderTextColor="#999"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-              autoCapitalize="none"
-            />
+            <View style={styles.passwordContainer}>
+              <TextInput
+                style={[styles.input, { flex: 1, borderWidth: 0 }]}
+                placeholder="Enter your password"
+                placeholderTextColor="#999"
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!showPassword}
+                autoCapitalize="none"
+              />
+              <TouchableOpacity
+                style={styles.eyeIcon}
+                onPress={() => setShowPassword(!showPassword)}
+              >
+                <Text style={styles.eyeIconText}>{showPassword ? 'Hide' : 'Show'}</Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
           <TouchableOpacity
@@ -160,6 +211,23 @@ const styles = StyleSheet.create({
     color: Colors.text,
     borderWidth: 1,
     borderColor: Colors.border,
+  },
+  passwordContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.white,
+    borderRadius: BorderRadius.input,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    paddingRight: 12,
+  },
+  eyeIcon: {
+    padding: 8,
+  },
+  eyeIconText: {
+    color: Colors.primary,
+    fontSize: 14,
+    fontWeight: '600',
   },
   button: {
     height: UI.buttonHeight,

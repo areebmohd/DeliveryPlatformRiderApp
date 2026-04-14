@@ -107,7 +107,15 @@ const ProfileSetupScreen = ({ navigation, route }: Props) => {
     } = await supabase.auth.getUser();
     if (!user) return;
 
-    // 1. Update Profile
+    // 1. Update Profile (Only if role is null or already rider)
+    const { data: currentProfile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
+    
+    if (currentProfile?.role && currentProfile.role !== 'rider') {
+      showAlert('Error', `This account is already registered as a ${currentProfile.role}. You cannot change it to a rider account.`);
+      setLoading(false);
+      return;
+    }
+
     const trimmedFullName = fullName.trim();
     const trimmedPhone = phone.trim();
     const trimmedUpiId = upiId.trim();

@@ -371,9 +371,12 @@ const DeliveriesScreen = ({ navigation }: any) => {
           </View>
           <Text style={styles.customerName}>{order.addresses?.receiver_name}</Text>
           <Text style={styles.addressText}>{order.addresses?.address_line}, {order.addresses?.city}</Text>
-          <TouchableOpacity onPress={() => Linking.openURL(`tel:${order.addresses?.receiver_phone}`)}>
+          <TouchableOpacity 
+            onPress={() => order.addresses?.receiver_phone ? Linking.openURL(`tel:${order.addresses.receiver_phone}`) : null}
+            disabled={!order.addresses?.receiver_phone}
+          >
             <Text style={styles.phoneText}>
-               <Icon name="phone" size={14} /> {order.addresses?.receiver_phone}
+               <Icon name="phone" size={14} color={Colors.primary} /> {order.addresses?.receiver_phone || 'Phone unavailable'}
             </Text>
           </TouchableOpacity>
 

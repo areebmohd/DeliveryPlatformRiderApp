@@ -23,6 +23,8 @@ const SignUpScreen = ({ navigation }: Props) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const { showAlert } = useCustomAlert();
 
@@ -69,14 +71,30 @@ const SignUpScreen = ({ navigation }: Props) => {
       });
 
       if (error) {
-        if (error.message.includes('already registered')) {
-          showAlert('Account Exists', 'An account with this email already exists. Please login instead.');
+        if (error.message.toLowerCase().includes('already registered') || error.message.toLowerCase().includes('already been taken')) {
+          // If already registered, it might be an unconfirmed user wanting to retry
+          try {
+            const { error: resendError } = await supabase.auth.resend({
+              type: 'signup',
+              email: email.toLowerCase().trim(),
+            });
+            
+            if (resendError) {
+              showAlert('Account Exists', 'This email is already registered. Please login instead.');
+            } else {
+              showAlert('Welcome Back', 'Your account exists but is not verified. A new verification code has been sent.');
+              navigation.navigate('VerifyEmailOTP', { email: email.toLowerCase().trim() });
+            }
+          } catch (resendError: any) {
+            showAlert('Account Exists', 'An account with this email already exists. Please login instead.');
+          }
           return;
         }
         showAlert('Sign up failed', error.message);
       } else if (!session) {
-        showAlert('Success', 'Please check your email for the verification link!');
-        navigation.navigate('Login');
+        // If no session is returned, it means email verification is required (OTP or Link)
+        showAlert('Success', 'Verification code sent! Please check your email.');
+        navigation.navigate('VerifyEmailOTP', { email: email.toLowerCase().trim() });
       }
     } catch (e: any) {
       showAlert('Error', e.message || 'An unexpected error occurred');
@@ -108,28 +126,44 @@ const SignUpScreen = ({ navigation }: Props) => {
 
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Password</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Min. 8 characters"
-              placeholderTextColor="#999"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-              autoCapitalize="none"
-            />
+            <View style={styles.passwordContainer}>
+              <TextInput
+                style={[styles.input, { flex: 1, borderWidth: 0 }]}
+                placeholder="Min. 8 characters"
+                placeholderTextColor="#999"
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!showPassword}
+                autoCapitalize="none"
+              />
+              <TouchableOpacity
+                style={styles.eyeIcon}
+                onPress={() => setShowPassword(!showPassword)}
+              >
+                <Text style={styles.eyeIconText}>{showPassword ? 'Hide' : 'Show'}</Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Confirm Password</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Repeat your password"
-              placeholderTextColor="#999"
-              value={confirmPassword}
-              onChangeText={setConfirmPassword}
-              secureTextEntry
-              autoCapitalize="none"
-            />
+            <View style={styles.passwordContainer}>
+              <TextInput
+                style={[styles.input, { flex: 1, borderWidth: 0 }]}
+                placeholder="Repeat your password"
+                placeholderTextColor="#999"
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
+                secureTextEntry={!showConfirmPassword}
+                autoCapitalize="none"
+              />
+              <TouchableOpacity
+                style={styles.eyeIcon}
+                onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+              >
+                <Text style={styles.eyeIconText}>{showConfirmPassword ? 'Hide' : 'Show'}</Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
           <TouchableOpacity
@@ -189,6 +223,23 @@ const styles = StyleSheet.create({
     color: Colors.text,
     borderWidth: 1,
     borderColor: Colors.border,
+  },
+  passwordContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.white,
+    borderRadius: BorderRadius.input,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    paddingRight: 12,
+  },
+  eyeIcon: {
+    padding: 8,
+  },
+  eyeIconText: {
+    color: Colors.primary,
+    fontSize: 14,
+    fontWeight: '600',
   },
   button: {
     height: UI.buttonHeight,

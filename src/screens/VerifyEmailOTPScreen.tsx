@@ -17,9 +17,9 @@ import { AuthStackParamList } from '../navigation/types';
 import { Colors, BorderRadius, UI, Typography } from '../theme/colors';
 import { useCustomAlert } from '../context/CustomAlertContext';
 
-type Props = NativeStackScreenProps<AuthStackParamList, 'VerifyResetOTP'>;
+type Props = NativeStackScreenProps<AuthStackParamList, 'VerifyEmailOTP'>;
 
-const VerifyResetOTPScreen = ({ navigation, route }: Props) => {
+const VerifyEmailOTPScreen = ({ navigation, route }: Props) => {
   const { email } = route.params;
   const [otp, setOtp] = useState('');
   const [loading, setLoading] = useState(false);
@@ -33,16 +33,33 @@ const VerifyResetOTPScreen = ({ navigation, route }: Props) => {
 
     setLoading(true);
     try {
-      const { error } = await supabase.auth.verifyOtp({
-        email: email,
+      const normalizedEmail = email.toLowerCase().trim();
+      
+      // Try with 'signup' type first as it's the most common for new accounts
+      const { data, error } = await supabase.auth.verifyOtp({
+        email: normalizedEmail,
         token: otp,
-        type: 'recovery',
+        type: 'signup',
       });
 
-      if (error) throw error;
-
-      // Verification successful, navigate to update password
-      navigation.navigate('ResetPassword', { email });
+      if (error) {
+        // Fallback to 'email' type if 'signup' fails (sometimes used for existing users)
+        console.log('Verification with type signup failed, trying email:', error.message);
+        const { data: retryData, error: retryError } = await supabase.auth.verifyOtp({
+          email: normalizedEmail,
+          token: otp,
+          type: 'email',
+        });
+        
+        if (retryError) throw retryError;
+        
+        showAlert('Success', 'Email verified successfully! You can now log in.');
+        navigation.navigate('Login');
+      } else {
+        showAlert('Success', 'Email verified successfully! You can now log in.');
+        navigation.navigate('Login');
+      }
+      
     } catch (error: any) {
       showAlert('Error', error.message || 'Invalid or expired code. Please try again.');
     } finally {
@@ -53,7 +70,10 @@ const VerifyResetOTPScreen = ({ navigation, route }: Props) => {
   const handleResendOTP = async () => {
     setLoading(true);
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email);
+      const { error } = await supabase.auth.resend({
+        email: email,
+        type: 'signup',
+      });
       if (error) throw error;
       showAlert('Success', 'A new verification code has been sent.');
     } catch (error: any) {
@@ -71,9 +91,9 @@ const VerifyResetOTPScreen = ({ navigation, route }: Props) => {
       <StatusBar backgroundColor={Colors.background} barStyle="dark-content" />
       <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
         <View style={styles.header}>
-          <Text style={styles.title}>Verify Code</Text>
+          <Text style={styles.title}>Confirm Email</Text>
           <Text style={styles.subtitle}>
-            Enter the verification code sent to {email}
+            Enter the verification code sent to {email} to verify your account.
           </Text>
         </View>
 
@@ -100,7 +120,7 @@ const VerifyResetOTPScreen = ({ navigation, route }: Props) => {
             {loading ? (
               <ActivityIndicator color={Colors.white} />
             ) : (
-              <Text style={styles.buttonText}>Verify Code</Text>
+              <Text style={styles.buttonText}>Verify & Log In</Text>
             )}
           </TouchableOpacity>
 
@@ -111,7 +131,7 @@ const VerifyResetOTPScreen = ({ navigation, route }: Props) => {
           >
             <Text style={styles.resendText}>
               Didn't receive a code?{' '}
-              <Text style={styles.resendHighlight}>Resend</Text>
+              <Text style={styles.resendHighlight}>Resend Email</Text>
             </Text>
           </TouchableOpacity>
         </View>
@@ -199,4 +219,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default VerifyResetOTPScreen;
+export default VerifyEmailOTPScreen;
