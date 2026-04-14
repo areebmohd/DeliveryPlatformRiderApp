@@ -18,6 +18,7 @@ const PaymentsScreen = ({ navigation }: any) => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [payouts, setPayouts] = useState<any[]>([]);
+  const [lifetimeEarnings, setLifetimeEarnings] = useState(0);
   const { showAlert } = useCustomAlert();
 
   const fetchRiderPayouts = async () => {
@@ -35,11 +36,20 @@ const PaymentsScreen = ({ navigation }: any) => {
 
       if (payoutsError) throw payoutsError;
 
-      // Fetch today's estimated earnings from dashboard stats
       const { data: stats, error: statsError } = await supabase.rpc('get_rider_dashboard_stats', {
         p_rider_id: user.id,
         days_limit: 1
       });
+
+      // Fetch lifetime earnings
+      const { data: lifetimeStats, error: lifetimeError } = await supabase.rpc('get_rider_dashboard_stats', {
+        p_rider_id: user.id,
+        days_limit: 3650 // ~10 years
+      });
+
+      if (lifetimeStats) {
+        setLifetimeEarnings(lifetimeStats.total_earnings || 0);
+      }
 
       let finalPayouts = payoutsData || [];
       const today = new Date().toISOString().split('T')[0];
@@ -109,8 +119,6 @@ const PaymentsScreen = ({ navigation }: any) => {
   const sortedGroups = groupByDate(payouts);
 
   // Summary calculations
-  const totalEarned = payouts.filter(p => p.status === 'sent').reduce((acc, p) => acc + parseFloat(p.amount), 0);
-  const pendingSettlement = payouts.filter(p => p.status !== 'sent').reduce((acc, p) => acc + parseFloat(p.amount), 0);
   const lastPayout = payouts.find(p => p.status === 'sent');
 
   return (
@@ -130,8 +138,8 @@ const PaymentsScreen = ({ navigation }: any) => {
           {/* Summary Dashboard */}
           <View style={styles.summaryContainer}>
             <View style={styles.mainSummaryCard}>
-              <Text style={styles.summaryLabel}>Total Earned</Text>
-              <Text style={styles.totalEarnedText}>₹{totalEarned.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</Text>
+              <Text style={styles.summaryLabel}>Lifetime Earnings</Text>
+              <Text style={styles.totalEarnedText}>₹{lifetimeEarnings.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</Text>
               {lastPayout && (
                 <View style={styles.lastPayoutContainer}>
                   <Icon name="clock-check-outline" size={12} color={Colors.white + '90'} />
@@ -140,28 +148,6 @@ const PaymentsScreen = ({ navigation }: any) => {
                   </Text>
                 </View>
               )}
-            </View>
-
-            <View style={styles.secondaryStatsRow}>
-              <View style={[styles.statCard, { backgroundColor: Colors.white }]}>
-                <View style={[styles.statIconContainer, { backgroundColor: Colors.primary + '10' }]}>
-                  <Icon name="timer-sand" size={20} color={Colors.primary} />
-                </View>
-                <View>
-                  <Text style={styles.statLabel}>Pending</Text>
-                  <Text style={[styles.statValue, { color: Colors.primary }]}>₹{pendingSettlement.toFixed(2)}</Text>
-                </View>
-              </View>
-
-              <View style={[styles.statCard, { backgroundColor: Colors.white }]}>
-                <View style={[styles.statIconContainer, { backgroundColor: Colors.success + '10' }]}>
-                  <Icon name="check-circle-outline" size={20} color={Colors.success} />
-                </View>
-                <View>
-                  <Text style={styles.statLabel}>Processed</Text>
-                  <Text style={[styles.statValue, { color: Colors.success }]}>₹{totalEarned.toFixed(2)}</Text>
-                </View>
-              </View>
             </View>
           </View>
 
@@ -237,7 +223,7 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: Spacing.md },
   
   // Summary Styles
-  summaryContainer: { marginTop: Spacing.md, marginBottom: Spacing.lg },
+  summaryContainer: { marginTop: Spacing.md, marginBottom: Spacing.sm },
   mainSummaryCard: { 
     backgroundColor: Colors.primary, 
     borderRadius: BorderRadius.xl, 
@@ -253,24 +239,6 @@ const styles = StyleSheet.create({
   lastPayoutContainer: { flexDirection: 'row', alignItems: 'center', marginTop: 16, gap: 6 },
   lastPayoutText: { color: Colors.white + '90', fontSize: 12, fontWeight: '500' },
   
-  secondaryStatsRow: { flexDirection: 'row', marginTop: Spacing.md, gap: Spacing.md },
-  statCard: { 
-    flex: 1, 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    padding: Spacing.md, 
-    borderRadius: BorderRadius.lg,
-    elevation: 2,
-    shadowColor: Colors.dark,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    gap: 12
-  },
-  statIconContainer: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center' },
-  statLabel: { fontSize: 11, color: Colors.textSecondary, fontWeight: '600' },
-  statValue: { fontSize: 16, fontWeight: '800', marginTop: 2 },
-
   // Section Styles
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: Spacing.sm, marginBottom: Spacing.sm },
   sectionTitle: { ...Typography.sectionLabel, color: Colors.text, fontSize: 16 },

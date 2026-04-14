@@ -9,6 +9,8 @@ import {
   TextInput,
   RefreshControl,
   Linking,
+  Modal,
+  ScrollView,
 } from 'react-native';
 import { supabase } from '../lib/supabaseClient';
 import { Colors, Spacing, BorderRadius } from '../theme/colors';
@@ -26,6 +28,10 @@ const DeliveriesScreen = ({ navigation }: any) => {
   const [otpInputs, setOtpInputs] = useState<{ [key: string]: string }>({});
   const { showAlert } = useCustomAlert();
   const { checkProfileCompleteness } = useProfileCheck();
+  const [breakdownModal, setBreakdownModal] = useState<{ visible: boolean; order: any }>({ 
+    visible: false, 
+    order: null 
+  });
 
   const fetchOrders = useCallback(async () => {
     try {
@@ -416,11 +422,20 @@ const DeliveriesScreen = ({ navigation }: any) => {
           <View style={styles.divider} />
           
           <View style={styles.cardFooter}>
-             <View style={styles.totalContainer}>
-                <Text style={styles.totalLabel}>Total Price</Text>
-                <Text style={styles.grandTotal}>₹{Number(order.total_amount).toFixed(0)}</Text>
-             </View>
-          </View>
+              <View style={styles.totalContainer}>
+                 <View>
+                   <Text style={styles.totalLabel}>Total Price</Text>
+                   <TouchableOpacity 
+                     onPress={() => setBreakdownModal({ visible: true, order: order })}
+                   >
+                     <Text style={styles.viewSharesText}>View Shares</Text>
+                   </TouchableOpacity>
+                 </View>
+                 <View style={{ alignItems: 'flex-end' }}>
+                   <Text style={styles.grandTotal}>₹{Number(order.total_amount).toFixed(0)}</Text>
+                 </View>
+              </View>
+           </View>
         </View>
       </View>
     );
@@ -555,6 +570,101 @@ const DeliveriesScreen = ({ navigation }: any) => {
           stickySectionHeadersEnabled={false}
         />
       )}
+
+      <Modal
+        visible={breakdownModal.visible}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setBreakdownModal({ ...breakdownModal, visible: false })}
+      >
+        <TouchableOpacity 
+          style={styles.modalOverlay} 
+          activeOpacity={1} 
+          onPress={() => setBreakdownModal({ ...breakdownModal, visible: false })}
+        >
+          <View style={styles.modalContent}>
+            <View style={styles.modalHandle} />
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Payout Breakdown</Text>
+              <TouchableOpacity onPress={() => setBreakdownModal({ ...breakdownModal, visible: false })}>
+                <Icon name="close" size={24} color={Colors.text} />
+              </TouchableOpacity>
+            </View>
+
+            {breakdownModal.order && (
+              <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+                <View style={styles.breakdownSection}>
+                  <Text style={styles.breakdownSectionTitle}>Store Items Total</Text>
+                  {(() => {
+                    const storeShares: { [key: string]: number } = {};
+                    breakdownModal.order.order_items.forEach((oi: any) => {
+                      const sName = oi.products?.stores?.name || breakdownModal.order.stores?.name || 'Store';
+                      const sId = oi.products?.store_id || breakdownModal.order.store_id;
+                      
+                      const storeOffer = breakdownModal.order.applied_offers?.[sId];
+                      let itemAmount = oi.product_price * oi.quantity;
+                      
+                      if (storeOffer?.type === 'discount') {
+                        itemAmount = itemAmount * (1 - storeOffer.amount / 100);
+                      } else if (storeOffer?.type === 'free_cash') {
+                        const totalStoreAmount = breakdownModal.order.order_items
+                          .filter((i: any) => (i.products?.store_id || breakdownModal.order.store_id) === sId)
+                          .reduce((acc: number, curr: any) => acc + curr.product_price * curr.quantity, 0);
+                        const proportion = (oi.product_price * oi.quantity) / (totalStoreAmount || 1);
+                        itemAmount = (oi.product_price * oi.quantity) - (storeOffer.amount * proportion);
+                      }
+
+                      if (!storeShares[sName]) storeShares[sName] = 0;
+                      storeShares[sName] += itemAmount;
+                    });
+
+                    return Object.entries(storeShares).map(([name, amount], idx) => (
+                      <View key={idx} style={[styles.breakdownRow, { marginBottom: 8 }]}>
+                        <Text style={[styles.breakdownLabel, { color: Colors.text, textTransform: 'none', fontSize: 14, fontWeight: '600' }]}>{name}</Text>
+                        <Text style={[styles.breakdownValue, { fontSize: 14 }]}>₹{Math.round(amount)}</Text>
+                      </View>
+                    ));
+                  })()}
+                </View>
+
+                <View style={styles.breakdownSection}>
+                  <Text style={styles.breakdownSectionTitle}>Fees & Services</Text>
+                  {breakdownModal.order.delivery_fee > 0 && (
+                    <View style={[styles.breakdownRow, { marginBottom: 8 }]}>
+                      <Text style={[styles.breakdownLabel, { color: Colors.text, textTransform: 'none', fontSize: 14, fontWeight: '600' }]}>Delivery Fee</Text>
+                      <Text style={[styles.breakdownValue, { fontSize: 14 }]}>₹{breakdownModal.order.delivery_fee}</Text>
+                    </View>
+                  )}
+                  {breakdownModal.order.platform_fee > 0 && (
+                    <View style={[styles.breakdownRow, { marginBottom: 8 }]}>
+                      <Text style={[styles.breakdownLabel, { color: Colors.text, textTransform: 'none', fontSize: 14, fontWeight: '600' }]}>Platform Fee</Text>
+                      <Text style={[styles.breakdownValue, { fontSize: 14 }]}>₹{breakdownModal.order.platform_fee}</Text>
+                    </View>
+                  )}
+                  {breakdownModal.order.helper_fee > 0 && (
+                    <View style={[styles.breakdownRow, { marginBottom: 8 }]}>
+                      <Text style={[styles.breakdownLabel, { color: Colors.text, textTransform: 'none', fontSize: 14, fontWeight: '600' }]}>Helper Fee</Text>
+                      <Text style={[styles.breakdownValue, { fontSize: 14 }]}>₹{breakdownModal.order.helper_fee}</Text>
+                    </View>
+                  )}
+                </View>
+
+                <View style={styles.grandTotalRowModal}>
+                  <Text style={styles.grandTotalLabelModal}>Grand Total</Text>
+                  <Text style={styles.grandTotalValueModal}>₹{Math.round(breakdownModal.order.total_amount)}</Text>
+                </View>
+              </ScrollView>
+            )}
+
+            <TouchableOpacity 
+              style={styles.closeBtnModal}
+              onPress={() => setBreakdownModal({ ...breakdownModal, visible: false })}
+            >
+              <Text style={styles.closeBtnTextModal}>Done</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 };
@@ -628,9 +738,15 @@ const styles = StyleSheet.create({
   },
   orderNumber: {
     fontSize: 16,
-    fontWeight: '700',
-    color: Colors.text,
-    marginBottom: 2,
+    fontWeight: '800',
+    color: '#333',
+    marginBottom: -2,
+  },
+  viewSharesText: {
+    fontSize: 11,
+    color: Colors.primary,
+    fontWeight: '800',
+    marginTop: 2,
   },
   badgeContainer: {
     flexDirection: 'row',
@@ -1007,7 +1123,6 @@ const styles = StyleSheet.create({
   },
   totalContainer: {
     flexDirection: 'row',
-    alignItems: 'baseline',
     justifyContent: 'space-between',
     width: '100%',
   },
@@ -1021,6 +1136,84 @@ const styles = StyleSheet.create({
     fontSize: 26,
     fontWeight: '900',
     color: Colors.primary,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: Colors.white,
+    borderTopLeftRadius: BorderRadius.xl,
+    borderTopRightRadius: BorderRadius.xl,
+    paddingTop: Spacing.sm,
+    paddingHorizontal: Spacing.lg,
+    paddingBottom: Spacing.xl,
+    maxHeight: '80%',
+  },
+  modalHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: Colors.border,
+    borderRadius: 2,
+    alignSelf: 'center',
+    marginBottom: Spacing.md,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.lg,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: Colors.text,
+  },
+  modalBody: {
+    marginBottom: Spacing.lg,
+  },
+  breakdownSection: {
+    marginBottom: Spacing.lg,
+  },
+  breakdownSectionTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: Colors.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: Spacing.sm,
+  },
+  grandTotalRowModal: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: Spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+    marginTop: Spacing.sm,
+  },
+  grandTotalLabelModal: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: Colors.text,
+  },
+  grandTotalValueModal: {
+    fontSize: 24,
+    fontWeight: '900',
+    color: Colors.primary,
+  },
+  closeBtnModal: {
+    backgroundColor: Colors.primary,
+    paddingVertical: 14,
+    borderRadius: BorderRadius.md,
+    alignItems: 'center',
+    marginTop: Spacing.md,
+  },
+  closeBtnTextModal: {
+    color: Colors.white,
+    fontWeight: '800',
+    fontSize: 16,
   },
 });
 

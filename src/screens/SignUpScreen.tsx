@@ -49,9 +49,10 @@ const SignUpScreen = ({ navigation }: Props) => {
       if (checkError) {
         console.error('Error checking email existence:', checkError);
       } else if (existingRole) {
+        const roleLabel = existingRole === 'store' ? 'Business' : existingRole === 'rider' ? 'Rider' : existingRole.charAt(0).toUpperCase() + existingRole.slice(1);
         showAlert(
           'Email Already Registered',
-          `This email is already registered as a ${existingRole}. One email can only be used for one account type. Please sign in or use a different email.`
+          `This email is already registered as a ${roleLabel}. One email can only be used for one account type. Please sign in or use a different email.`
         );
         setLoading(false);
         return;

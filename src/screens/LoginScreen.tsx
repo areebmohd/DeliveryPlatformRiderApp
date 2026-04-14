@@ -71,10 +71,11 @@ const LoginScreen = ({ navigation }: Props) => {
           // If profile doesn't exist, it might be a brand new user, let them through to setup
         } else if (profile && profile.role && profile.role !== 'rider') {
           // Block access for non-rider roles
+          const roleLabel = profile.role === 'store' ? 'Business' : profile.role.charAt(0).toUpperCase() + profile.role.slice(1);
           await supabase.auth.signOut();
           showAlert(
             'Access Denied',
-            `This account is registered as a ${profile.role}. One email can only be used for one account type. Please use a different email or log in to the appropriate app.`
+            `This account is registered as a ${roleLabel}. One email can only be used for one account type. Please use a different email or log in to the appropriate app.`
           );
           setLoading(false);
           return;
