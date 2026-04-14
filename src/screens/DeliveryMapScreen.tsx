@@ -47,9 +47,19 @@ const DeliveryMapScreen = ({ route, navigation }: any) => {
   }, []);
 
   const [nextRouteLine, setNextRouteLine] = useState<any>(null);
-  const [remainingRouteLine, setRemainingRouteLine] = useState<any>(null);
-
   const [lastStopsHash, setLastStopsHash] = useState<string>('');
+
+  const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+    const R = 6371; // km
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = 
+      Math.sin(dLat/2) * Math.sin(dLat/2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+      Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+  };
 
   const calculateAndFetchRoute = useCallback(async () => {
     if (!riderLocation || activeOrders.length === 0) return;
@@ -59,9 +69,9 @@ const DeliveryMapScreen = ({ route, navigation }: any) => {
 
     const customerLoc = parseLocation(selectedOrder.addresses?.location);
 
-    let stops: any[] = [];
+    let rawStops: any[] = [];
     if (selectedOrder.status === 'picked_up') {
-      if (customerLoc) stops = [customerLoc];
+      if (customerLoc) rawStops = [customerLoc];
     } else {
       const orderStores = new Map();
       if (selectedOrder.stores) orderStores.set(selectedOrder.stores.id, selectedOrder.stores);
@@ -73,53 +83,53 @@ const DeliveryMapScreen = ({ route, navigation }: any) => {
           if (!allPicked) orderStores.set(s.id, s);
         }
       });
-      stops = Array.from(orderStores.values())
+      rawStops = Array.from(orderStores.values())
         .map(s => parseLocation(s.location))
         .filter(l => !!l);
-      if (customerLoc) stops.push(customerLoc);
+      if (customerLoc) rawStops.push(customerLoc);
     }
 
-    if (stops.length === 0) {
+    if (rawStops.length === 0) {
       setNextRouteLine(null);
-      setRemainingRouteLine(null);
       setLastStopsHash('');
       return;
     }
 
-    // MEMORY/SPEED FIX: If the stops haven't changed, don't spam the routing API 
-    // every time the rider's GPS ticks.
+    // SHORTEST PATH: Sort rawStops by proximity to current rider location
+    const stops = [...rawStops].sort((a, b) => {
+      const distA = calculateDistance(riderLocation.latitude, riderLocation.longitude, a.latitude, a.longitude);
+      const distB = calculateDistance(riderLocation.latitude, riderLocation.longitude, b.latitude, b.longitude);
+      return distA - distB;
+    });
+
+    // MEMORY/SPEED FIX: If the next stop hasn't changed, don't spam the routing API
     const currentStopsHash = stops.map(s => `${s.longitude},${s.latitude}`).join('|');
     if (lastStopsHash === currentStopsHash && nextRouteLine) {
       return;
     }
 
     try {
-      const nextCoords = `${riderLocation.longitude},${riderLocation.latitude};${stops[0].longitude},${stops[0].latitude}`;
-      const nextUrl = `https://apis.mappls.com/advancedmaps/v1/${REST_API_KEY}/route_adv/driving/${nextCoords}?alternatives=false&steps=false&overview=full&geometries=geojson`;
-      const nextResponse = await fetch(nextUrl);
-      const nextResult = await nextResponse.json();
-      if (nextResult.routes && nextResult.routes.length > 0) {
-        setNextRouteLine(nextResult.routes[0].geometry);
-      }
-
-      if (stops.length > 1) {
-        const remainingCoords = stops.map(s => `${s.longitude},${s.latitude}`).join(';');
-        const remainingUrl = `https://apis.mappls.com/advancedmaps/v1/${REST_API_KEY}/route_adv/driving/${remainingCoords}?alternatives=false&steps=false&overview=full&geometries=geojson`;
-        const remResponse = await fetch(remainingUrl);
-        const remResult = await remResponse.json();
-        if (remResult.routes && remResult.routes.length > 0) {
-          setRemainingRouteLine(remResult.routes[0].geometry);
+      // DIRECT PATH: Instead of API road routing (which misses small galis), 
+      // we draw a straight direct line to the next stop.
+      const directPath = {
+        type: 'Feature',
+        properties: {},
+        geometry: {
+          type: 'LineString',
+          coordinates: [
+            [riderLocation.longitude, riderLocation.latitude],
+            [stops[0].longitude, stops[0].latitude]
+          ]
         }
-      } else {
-        setRemainingRouteLine(null);
-      }
-
+      };
+      
+      setNextRouteLine(directPath);
       setLastStopsHash(currentStopsHash);
       fitToStops(stops);
     } catch (error) {
-      console.error('Error fetching route:', error);
+      console.error('Error updating path:', error);
     }
-  }, [riderLocation, activeOrders, orderId, stores, lastStopsHash, nextRouteLine]);
+  }, [riderLocation, activeOrders, orderId, lastStopsHash, nextRouteLine]);
 
   useEffect(() => {
     if (activeOrders.length > 0 && riderLocation) {
@@ -137,7 +147,8 @@ const DeliveryMapScreen = ({ route, navigation }: any) => {
         .select(`
           *,
           stores:store_id (id, name, location, address),
-          addresses:delivery_address_id (receiver_name, location, address_line, city),
+          addresses:delivery_address_id (location, address_line, city),
+          customer:profiles!orders_customer_id_fkey (phone, full_name),
           order_items (
             product_id,
             products (
@@ -280,32 +291,16 @@ const DeliveryMapScreen = ({ route, navigation }: any) => {
           centerCoordinate={initialCenter}
         />
 
-        {/* Next Segment - GREEN */}
+        {/* Primary Route Line - Solid Blue */}
         {nextRouteLine && (
           <ShapeSource id="nextRouteSource" shape={nextRouteLine}>
             <LineLayer
               id="nextRouteLayer"
               style={{
-                lineColor: Colors.success,
-                lineWidth: 5,
-                lineJoin: 'round',
-                lineCap: 'round',
-              }}
-            />
-          </ShapeSource>
-        )}
-
-        {/* Remaining Segments - BLUE */}
-        {remainingRouteLine && (
-          <ShapeSource id="remainingRouteSource" shape={remainingRouteLine}>
-            <LineLayer
-              id="remainingRouteLayer"
-              style={{
                 lineColor: Colors.primary,
                 lineWidth: 5,
                 lineJoin: 'round',
                 lineCap: 'round',
-                lineDasharray: [1, 2], // Optional: make it dashed to distinguish further
               }}
             />
           </ShapeSource>

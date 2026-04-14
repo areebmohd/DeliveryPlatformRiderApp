@@ -19,6 +19,65 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCustomAlert } from '../context/CustomAlertContext';
 import { useProfileCheck } from '../hooks/useProfileCheck';
 
+export const getItemTotals = (product: any, allStoreItems: any[], storeOffer: any) => {
+  const originalTotal = product.product_price * product.quantity;
+  if (!storeOffer) return { original: originalTotal, discounted: originalTotal };
+
+  // Resolve the product's UUID from whichever field is available:
+  // - product_id: present in direct Supabase query results
+  // - products.id: present in RPC results (get_nearby_unassigned_orders)
+  const productId = product.product_id || product.products?.id || product.id;
+
+  let discountedTotal = originalTotal;
+
+  switch (storeOffer.type) {
+    case 'discount':
+      discountedTotal = originalTotal * (1 - storeOffer.amount / 100);
+      break;
+    case 'free_cash':
+      const totalStoreAmount = allStoreItems.reduce((acc: any, curr: any) => acc + curr.product_price * curr.quantity, 0);
+      const proportion = originalTotal / (totalStoreAmount || 1);
+      discountedTotal = originalTotal - (storeOffer.amount * proportion);
+      break;
+    case 'cheap_product':
+      if (storeOffer.conditions?.product_ids?.includes(productId)) {
+        discountedTotal = originalTotal * (1 - storeOffer.amount / 100);
+      }
+      break;
+    case 'fixed_price':
+      if (storeOffer.reward_data?.product_ids?.includes(productId)) {
+        discountedTotal = storeOffer.amount * product.quantity;
+      }
+      break;
+    case 'combo':
+      if (storeOffer.reward_data?.product_ids?.includes(productId)) {
+        // Only 1 unit of each product participates in the bundle; extra units are full price
+        const comboItemIds = storeOffer.reward_data?.product_ids || [];
+        const comboItems = allStoreItems.filter((i: any) => {
+          const iId = i.product_id || i.products?.id || i.id;
+          return comboItemIds.includes(iId);
+        });
+        const comboBundleOriginal = comboItems.reduce((acc: any, curr: any) => acc + curr.product_price, 0); // 1 of each unit
+        const totalBundleDiscount = Math.max(0, comboBundleOriginal - storeOffer.amount);
+        const myProportion = product.product_price / (comboBundleOriginal || 1);
+        const myBundleDiscount = totalBundleDiscount * myProportion; // discount on exactly 1 unit
+        // 1 discounted unit + (quantity - 1) full price units
+        discountedTotal = (product.product_price - myBundleDiscount) + (product.product_price * (product.quantity - 1));
+      }
+      break;
+    case 'free_product':
+      if (product.selected_options?.gift === 'true') {
+        discountedTotal = 0;
+      }
+      break;
+  }
+
+  return { 
+    original: originalTotal, 
+    discounted: Math.max(0, discountedTotal)
+  };
+};
+
 const DeliveriesScreen = ({ navigation }: any) => {
   const insets = useSafeAreaInsets();
   const [loading, setLoading] = useState(true);
@@ -45,6 +104,7 @@ const DeliveriesScreen = ({ navigation }: any) => {
           *,
           stores:store_id (*),
           addresses:delivery_address_id (*),
+          customer:profiles!orders_customer_id_fkey (phone, full_name),
           order_items (
             *,
             is_picked_up,
@@ -96,6 +156,7 @@ const DeliveriesScreen = ({ navigation }: any) => {
           *,
           stores:store_id (*),
           addresses:delivery_address_id (*),
+          customer:profiles!orders_customer_id_fkey (phone, full_name),
           order_items (
             *,
             is_picked_up,
@@ -238,7 +299,7 @@ const DeliveriesScreen = ({ navigation }: any) => {
         {/* Store Details (Grouped) */}
         {(() => {
           const groups: { [key: string]: { id: string, name: string, address: string, phone?: string, items: any[] } } = {};
-          order.order_items?.forEach((oi: any) => {
+          order.order_items?.filter((oi: any) => !oi.is_removed).forEach((oi: any) => {
             const store = oi.products?.stores || (Array.isArray(oi.products) ? oi.products[0]?.stores : null) || order.stores;
             const sId = store?.id || 'unknown';
             if (!groups[sId]) {
@@ -285,19 +346,15 @@ const DeliveriesScreen = ({ navigation }: any) => {
               {/* Find offers for this specific store */}
               {(() => {
                 const storeOffer = order.applied_offers?.[group.id];
-                const deliveryOffer = order.applied_offers?.[`${group.id}_delivery` || ''];
+                const deliveryOffer = order.applied_offers?.[`${group.id}_delivery`];
                 
                 return (
                   <>
                     {group.items.length > 0 && (
                       <View style={styles.productList}>
                         {group.items.map((item: any) => {
-                          const hasDiscount = storeOffer?.type === 'discount' || storeOffer?.type === 'free_cash';
-                          let discountedPrice = item.product_price;
-                          
-                          if (storeOffer?.type === 'discount') {
-                            discountedPrice = item.product_price * (1 - storeOffer.amount / 100);
-                          }
+                          const storeOffer = order.applied_offers?.[group.id];
+                          const { original, discounted } = getItemTotals(item, group.items, storeOffer);
 
                           return (
                             <View key={item.id} style={styles.productItemContainer}>
@@ -307,7 +364,7 @@ const DeliveriesScreen = ({ navigation }: any) => {
                                   {item.selected_options && Object.keys(item.selected_options).length > 0 && (
                                     <Text style={styles.itemOptionsText}>
                                       {` (${Object.entries(item.selected_options)
-                                        .map(([k, v]) => `${v}`)
+                                        .map(([k, v]) => k === 'gift' ? 'Gift' : `${v}`)
                                         .join(', ')})`}
                                     </Text>
                                   )}
@@ -317,14 +374,59 @@ const DeliveriesScreen = ({ navigation }: any) => {
                                   {item.is_picked_up && (
                                     <Icon name="check-circle" size={14} color={Colors.success} style={{ marginRight: 4 }} />
                                   )}
-                                  <View style={{ alignItems: 'flex-end' }}>
-                                    <Text style={styles.productPrice}>₹{Math.round(discountedPrice * item.quantity)}</Text>
+                                  <View style={{ alignItems: 'flex-end', flexDirection: 'row', gap: 6 }}>
+                                    {discounted < original ? (
+                                      <>
+                                        <Text style={styles.productPrice}>₹{Math.round(discounted)}</Text>
+                                        <Text style={[styles.productPrice, { textDecorationLine: 'line-through', color: Colors.textSecondary, fontSize: 11 }]}>₹{original}</Text>
+                                      </>
+                                    ) : (
+                                      <Text style={styles.productPrice}>₹{original}</Text>
+                                    )}
                                   </View>
                                 </View>
                               </View>
                             </View>
                           );
                         })}
+                      </View>
+                    )}
+
+                    {/* Applied Offer Badges */}
+                    {(storeOffer || deliveryOffer) && (
+                      <View style={styles.offerBadgeContainer}>
+                        {storeOffer && (
+                          <View style={styles.offerBadge}>
+                            <Icon name="ticket-percent-outline" size={14} color="#16a34a" />
+                            <View style={{ flex: 1 }}>
+                              <Text style={styles.offerBadgeName}>{storeOffer.name || 'Store Offer'}</Text>
+                              <Text style={styles.offerBadgeDesc}>
+                                {(() => {
+                                  const { type, amount, reward_data } = storeOffer;
+                                  const productName = reward_data?.product_name;
+                                  switch (type) {
+                                    case 'discount': return `${amount}% Instant Discount on Total Items Price`;
+                                    case 'free_cash': return `₹${amount} Free Cash amount`;
+                                    case 'cheap_product': return `${amount}% Instant Discount on ${productName || 'Some Items'}`;
+                                    case 'combo': return `${productName || 'Items'} at Only ₹${amount}`;
+                                    case 'fixed_price': return `${productName || 'Selected Items'} at ₹${amount} each`;
+                                    case 'free_product': return `Get Free ${productName || 'Gift Item'}`;
+                                    default: return 'Special store offer';
+                                  }
+                                })()}
+                              </Text>
+                            </View>
+                          </View>
+                        )}
+                        {deliveryOffer && (
+                          <View style={[styles.offerBadge, { backgroundColor: '#fffbeb', borderColor: '#fde68a' }]}>
+                            <Icon name="truck-delivery-outline" size={14} color="#d97706" />
+                            <View style={{ flex: 1 }}>
+                              <Text style={[styles.offerBadgeName, { color: '#d97706' }]}>{deliveryOffer.name || 'Free Delivery'}</Text>
+                              <Text style={styles.offerBadgeDesc}>₹0 Delivery fee</Text>
+                            </View>
+                          </View>
+                        )}
                       </View>
                     )}
                   </>
@@ -375,14 +477,19 @@ const DeliveriesScreen = ({ navigation }: any) => {
             <Icon name="account" size={18} color={Colors.success} />
             <Text style={styles.sectionTitle}>Deliver to Customer</Text>
           </View>
-          <Text style={styles.customerName}>{order.addresses?.receiver_name}</Text>
+          <Text style={styles.customerName}>
+            {order.customer?.full_name || (Array.isArray(order.customer) ? order.customer[0]?.full_name : 'Customer')}
+          </Text>
           <Text style={styles.addressText}>{order.addresses?.address_line}, {order.addresses?.city}</Text>
           <TouchableOpacity 
-            onPress={() => order.addresses?.receiver_phone ? Linking.openURL(`tel:${order.addresses.receiver_phone}`) : null}
-            disabled={!order.addresses?.receiver_phone}
+            onPress={() => {
+              const phone = order.customer?.phone || (Array.isArray(order.customer) ? order.customer[0]?.phone : null);
+              if (phone) Linking.openURL(`tel:${phone}`);
+            }}
+            disabled={!(order.customer?.phone || (Array.isArray(order.customer) ? order.customer[0]?.phone : null))}
           >
             <Text style={styles.phoneText}>
-               <Icon name="phone" size={14} color={Colors.primary} /> {order.addresses?.receiver_phone || 'Phone unavailable'}
+              <Icon name="phone" size={14} color={Colors.primary} /> { (order.customer?.phone || (Array.isArray(order.customer) ? order.customer[0]?.phone : null)) || 'Phone unavailable' }
             </Text>
           </TouchableOpacity>
 
@@ -591,70 +698,84 @@ const DeliveriesScreen = ({ navigation }: any) => {
               </TouchableOpacity>
             </View>
 
-            {breakdownModal.order && (
-              <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
-                <View style={styles.breakdownSection}>
-                  <Text style={styles.breakdownSectionTitle}>Store Items Total</Text>
-                  {(() => {
-                    const storeShares: { [key: string]: number } = {};
-                    breakdownModal.order.order_items.forEach((oi: any) => {
-                      const sName = oi.products?.stores?.name || breakdownModal.order.stores?.name || 'Store';
-                      const sId = oi.products?.store_id || breakdownModal.order.store_id;
-                      
-                      const storeOffer = breakdownModal.order.applied_offers?.[sId];
-                      let itemAmount = oi.product_price * oi.quantity;
-                      
-                      if (storeOffer?.type === 'discount') {
-                        itemAmount = itemAmount * (1 - storeOffer.amount / 100);
-                      } else if (storeOffer?.type === 'free_cash') {
-                        const totalStoreAmount = breakdownModal.order.order_items
-                          .filter((i: any) => (i.products?.store_id || breakdownModal.order.store_id) === sId)
-                          .reduce((acc: number, curr: any) => acc + curr.product_price * curr.quantity, 0);
-                        const proportion = (oi.product_price * oi.quantity) / (totalStoreAmount || 1);
-                        itemAmount = (oi.product_price * oi.quantity) - (storeOffer.amount * proportion);
-                      }
+            {breakdownModal.order && (() => {
+              const storeShares: { [key: string]: number } = {};
+              let totalSponsoredDelivery = 0;
+              const { order } = breakdownModal;
+              
+              order.order_items.filter((oi: any) => !oi.is_removed).forEach((oi: any) => {
+                const sName = oi.products?.stores?.name || order.stores?.name || 'Store';
+                const sId = oi.products?.stores?.id || order.stores?.id;
+                
+                const storeOffer = order.applied_offers?.[sId];
+                const allStoreItems = order.order_items.filter((i: any) => 
+                  !i.is_removed && (i.products?.stores?.id || order.stores?.id) === sId
+                );
+                
+                const { discounted } = getItemTotals(oi, allStoreItems, storeOffer);
 
-                      if (!storeShares[sName]) storeShares[sName] = 0;
-                      storeShares[sName] += itemAmount;
-                    });
+                if (storeShares[sName] === undefined) {
+                  storeShares[sName] = 0;
+                  const deliveryFeePaidByStore = order.store_delivery_fees?.[sId] || (order.applied_offers?.[`${sId}_delivery`] ? 25 : 0);
+                  storeShares[sName] -= deliveryFeePaidByStore;
+                  totalSponsoredDelivery += deliveryFeePaidByStore;
+                }
+                storeShares[sName] += discounted;
+              });
 
-                    return Object.entries(storeShares).map(([name, amount], idx) => (
+              let displayDeliveryFee = order.delivery_fee || 0;
+              let displayPlatformFee = order.platform_fee || 0;
+
+              if (totalSponsoredDelivery > 0) {
+                if (displayDeliveryFee === 0) {
+                  displayDeliveryFee = 25;
+                  displayPlatformFee += (totalSponsoredDelivery - 25);
+                } else {
+                  displayPlatformFee += totalSponsoredDelivery;
+                }
+              }
+
+              return (
+                <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+                  <View style={styles.breakdownSection}>
+                    <Text style={styles.breakdownSectionTitle}>Store Items Total</Text>
+                    {Object.entries(storeShares).map(([name, amount], idx) => (
                       <View key={idx} style={[styles.breakdownRow, { marginBottom: 8 }]}>
                         <Text style={[styles.breakdownLabel, { color: Colors.text, textTransform: 'none', fontSize: 14, fontWeight: '600' }]}>{name}</Text>
                         <Text style={[styles.breakdownValue, { fontSize: 14 }]}>₹{Math.round(amount)}</Text>
                       </View>
-                    ));
-                  })()}
-                </View>
+                    ))}
+                  </View>
 
-                <View style={styles.breakdownSection}>
-                  <Text style={styles.breakdownSectionTitle}>Fees & Services</Text>
-                  {breakdownModal.order.delivery_fee > 0 && (
-                    <View style={[styles.breakdownRow, { marginBottom: 8 }]}>
-                      <Text style={[styles.breakdownLabel, { color: Colors.text, textTransform: 'none', fontSize: 14, fontWeight: '600' }]}>Delivery Fee</Text>
-                      <Text style={[styles.breakdownValue, { fontSize: 14 }]}>₹{breakdownModal.order.delivery_fee}</Text>
-                    </View>
-                  )}
-                  {breakdownModal.order.platform_fee > 0 && (
-                    <View style={[styles.breakdownRow, { marginBottom: 8 }]}>
-                      <Text style={[styles.breakdownLabel, { color: Colors.text, textTransform: 'none', fontSize: 14, fontWeight: '600' }]}>Platform Fee</Text>
-                      <Text style={[styles.breakdownValue, { fontSize: 14 }]}>₹{breakdownModal.order.platform_fee}</Text>
-                    </View>
-                  )}
-                  {breakdownModal.order.helper_fee > 0 && (
-                    <View style={[styles.breakdownRow, { marginBottom: 8 }]}>
-                      <Text style={[styles.breakdownLabel, { color: Colors.text, textTransform: 'none', fontSize: 14, fontWeight: '600' }]}>Helper Fee</Text>
-                      <Text style={[styles.breakdownValue, { fontSize: 14 }]}>₹{breakdownModal.order.helper_fee}</Text>
-                    </View>
-                  )}
-                </View>
+                  <View style={styles.breakdownSection}>
+                    <Text style={styles.breakdownSectionTitle}>Fees & Services</Text>
+                    {displayDeliveryFee > 0 && (
+                      <View style={[styles.breakdownRow, { marginBottom: 8 }]}>
+                        <Text style={[styles.breakdownLabel, { color: Colors.text, textTransform: 'none', fontSize: 14, fontWeight: '600' }]}>Delivery Fee</Text>
+                        <Text style={[styles.breakdownValue, { fontSize: 14 }]}>₹{displayDeliveryFee}</Text>
+                      </View>
+                    )}
+                    {displayPlatformFee > 0 && (
+                      <View style={[styles.breakdownRow, { marginBottom: 8 }]}>
+                        <Text style={[styles.breakdownLabel, { color: Colors.text, textTransform: 'none', fontSize: 14, fontWeight: '600' }]}>Platform Fee</Text>
+                        <Text style={[styles.breakdownValue, { fontSize: 14 }]}>₹{displayPlatformFee}</Text>
+                      </View>
+                    )}
+                    {order.helper_fee > 0 && (
+                      <View style={[styles.breakdownRow, { marginBottom: 8 }]}>
+                        <Text style={[styles.breakdownLabel, { color: Colors.text, textTransform: 'none', fontSize: 14, fontWeight: '600' }]}>Helper Fee</Text>
+                        <Text style={[styles.breakdownValue, { fontSize: 14 }]}>₹{order.helper_fee}</Text>
+                      </View>
+                    )}
+                  </View>
 
-                <View style={styles.grandTotalRowModal}>
-                  <Text style={styles.grandTotalLabelModal}>Grand Total</Text>
-                  <Text style={styles.grandTotalValueModal}>₹{Math.round(breakdownModal.order.total_amount)}</Text>
-                </View>
-              </ScrollView>
-            )}
+                  <View style={styles.grandTotalRowModal}>
+                    <Text style={styles.grandTotalLabelModal}>Grand Total</Text>
+                    <Text style={styles.grandTotalValueModal}>₹{Math.round(order.total_amount)}</Text>
+                  </View>
+                </ScrollView>
+              );
+            })()}
 
             <TouchableOpacity 
               style={styles.closeBtnModal}
@@ -1094,6 +1215,32 @@ const styles = StyleSheet.create({
     color: Colors.success,
     fontWeight: '700',
     fontSize: 12,
+  },
+  offerBadgeContainer: {
+    marginTop: 8,
+    gap: 6,
+  },
+  offerBadge: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    backgroundColor: '#f0fdf4',
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+    borderRadius: BorderRadius.sm,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+  },
+  offerBadgeName: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#15803d',
+  },
+  offerBadgeDesc: {
+    fontSize: 11,
+    color: Colors.textSecondary,
+    marginTop: 1,
+    fontWeight: '500',
   },
   cardFooter: {
     marginTop: 4,

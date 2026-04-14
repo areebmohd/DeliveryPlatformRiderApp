@@ -145,8 +145,6 @@ const ProfileSetupScreen = ({ navigation, route }: Props) => {
       city: city.trim(),
       state: state.trim(),
       is_default: true,
-      receiver_name: trimmedFullName,
-      receiver_phone: trimmedPhone,
     };
 
     const riderProfileData = {
