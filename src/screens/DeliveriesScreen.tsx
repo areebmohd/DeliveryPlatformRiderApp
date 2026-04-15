@@ -70,9 +70,18 @@ const DeliveriesScreen = ({ navigation }: any) => {
 
       let fetchedOrders: any[] = activeOrders || [];
       
-      // Look for unassigned orders (all riders can see them now)
+      // 2. Fetch rider's vehicle type
+      const { data: riderProfile } = await supabase
+        .from('rider_profiles')
+        .select('vehicle_type')
+        .eq('profile_id', user.id)
+        .maybeSingle();
+      
+      const vehicleType = (riderProfile?.vehicle_type || 'bike').toLowerCase();
+      
+      // 3. Look for unassigned orders matching vehicle type
       const { data: availableOrders, error: availableError } = await supabase
-        .rpc('get_nearby_unassigned_orders');
+        .rpc('get_nearby_unassigned_orders', { rider_vehicle_type: vehicleType });
 
       if (availableError) {
         console.error('Error fetching available orders:', availableError);

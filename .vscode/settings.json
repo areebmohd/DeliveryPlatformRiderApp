@@ -1,0 +1,11 @@
+{
+  "java.project.importHint": "gradle",
+  "java.import.exclusions": [
+    "**/node_modules/**"
+  ],
+  "files.exclude": {
+    "node_modules/@react-native/gradle-plugin/**/.project": true,
+    "node_modules/@react-native/gradle-plugin/**/.classpath": true,
+    "node_modules/@react-native/gradle-plugin/**/.settings": true
+  }
+}

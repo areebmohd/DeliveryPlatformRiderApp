@@ -90,9 +90,13 @@ const AccountScreen = ({ navigation }: { navigation: any }) => {
 
         {profile?.rider_profiles?.[0]?.vehicle_type && profile?.rider_profiles?.[0]?.vehicle_number && (
           <View style={styles.vehicleInfo}>
-            <Icon name="bicycle" size={16} color={Colors.primary} />
+            <Icon 
+              name={profile.rider_profiles[0].vehicle_type.toLowerCase() === 'truck' ? 'truck-delivery' : 'moped'} 
+              size={18} 
+              color={Colors.primary} 
+            />
             <Text style={styles.vehicleText}>
-              {profile.rider_profiles[0].vehicle_type} • {profile.rider_profiles[0].vehicle_number}
+              {profile.rider_profiles[0].vehicle_type.toUpperCase()} • {profile.rider_profiles[0].vehicle_number}
             </Text>
           </View>
         )}

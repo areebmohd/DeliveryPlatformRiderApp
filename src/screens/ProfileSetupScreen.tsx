@@ -12,6 +12,7 @@ import {
   Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { supabase } from '../lib/supabaseClient';
 import { useCustomAlert } from '../context/CustomAlertContext';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -64,7 +65,9 @@ const ProfileSetupScreen = ({ navigation, route }: Props) => {
 
     const riderProfile = riderProfileRes.data;
     if (riderProfile) {
-      setVehicleType(riderProfile.vehicle_type || '');
+      // Standardize to lowercase bike/truck
+      const vt = (riderProfile.vehicle_type || '').toLowerCase();
+      setVehicleType(vt === 'truck' ? 'truck' : (vt === 'bike' ? 'bike' : ''));
       setVehicleNumber(riderProfile.vehicle_number || '');
     }
 
@@ -299,13 +302,49 @@ const ProfileSetupScreen = ({ navigation, route }: Props) => {
           <Text style={[styles.sectionTitle, { marginTop: 20 }]}>
             Vehicle Details
           </Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Vehicle Type (e.g. Honda Activa)"
-            placeholderTextColor="#999"
-            value={vehicleType}
-            onChangeText={setVehicleType}
-          />
+          
+          <View style={styles.vehicleSelector}>
+            <TouchableOpacity 
+              style={[
+                styles.vehicleCard, 
+                vehicleType === 'bike' && styles.vehicleCardSelected
+              ]} 
+              onPress={() => setVehicleType('bike')}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.vehicleIconCircle, vehicleType === 'bike' && styles.vehicleIconCircleSelected]}>
+                <Icon name="moped" size={28} color={vehicleType === 'bike' ? Colors.white : Colors.primary} />
+              </View>
+              <Text style={[styles.vehicleLabel, vehicleType === 'bike' && styles.vehicleLabelSelected]}>Bike</Text>
+              <Text style={styles.vehicleDesc}>Quick & efficient</Text>
+              {vehicleType === 'bike' && (
+                <View style={styles.checkBadge}>
+                  <Icon name="check" size={12} color={Colors.white} />
+                </View>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={[
+                styles.vehicleCard, 
+                vehicleType === 'truck' && styles.vehicleCardSelected
+              ]} 
+              onPress={() => setVehicleType('truck')}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.vehicleIconCircle, vehicleType === 'truck' && styles.vehicleIconCircleSelected]}>
+                <Icon name="truck-delivery" size={28} color={vehicleType === 'truck' ? Colors.white : Colors.primary} />
+              </View>
+              <Text style={[styles.vehicleLabel, vehicleType === 'truck' && styles.vehicleLabelSelected]}>Truck</Text>
+              <Text style={styles.vehicleDesc}>Large & bulky</Text>
+              {vehicleType === 'truck' && (
+                <View style={styles.checkBadge}>
+                  <Icon name="check" size={12} color={Colors.white} />
+                </View>
+              )}
+            </TouchableOpacity>
+          </View>
+
           <TextInput
             style={styles.input}
             placeholder="Vehicle Number (e.g. DL 1S AB 1234)"
@@ -384,6 +423,68 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   buttonText: { color: Colors.white, ...Typography.button },
+  vehicleSelector: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 20,
+  },
+  vehicleCard: {
+    flex: 1,
+    backgroundColor: Colors.white,
+    borderRadius: BorderRadius.card,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    alignItems: 'center',
+    position: 'relative',
+    shadowColor: Colors.black,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  vehicleCardSelected: {
+    borderColor: Colors.primary,
+    backgroundColor: Colors.primaryLight,
+    borderWidth: 2,
+  },
+  vehicleIconCircle: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: Colors.primaryLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  vehicleIconCircleSelected: {
+    backgroundColor: Colors.primary,
+  },
+  vehicleLabel: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: Colors.text,
+    marginBottom: 2,
+  },
+  vehicleLabelSelected: {
+    color: Colors.primary,
+  },
+  vehicleDesc: {
+    fontSize: 11,
+    color: Colors.textSecondary,
+    fontWeight: '500',
+  },
+  checkBadge: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: Colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
 });
 
 export default ProfileSetupScreen;
