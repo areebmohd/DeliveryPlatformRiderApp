@@ -8,6 +8,7 @@ export const Colors = {
   info: '#17a2b8',
   light: '#f8f9fa',
   dark: '#212529',
+  black: '#000000',
   white: '#ffffff',
   background: '#f8f9fa',
   border: '#dee2e6',
@@ -33,6 +34,7 @@ export const BorderRadius = {
   input: 12,
   button: 12,
   card: 16,
+  pill: 999,
 };
 
 export const Typography = {

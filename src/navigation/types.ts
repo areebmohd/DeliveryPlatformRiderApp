@@ -11,4 +11,5 @@ export type AuthStackParamList = {
   DeliveryMap: { orderId: string };
   Payments: undefined;
   Support: undefined;
+  ProductDetails: { items: any[]; storeName: string; appliedOffers: any };
 };
