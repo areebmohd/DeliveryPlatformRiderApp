@@ -20,6 +20,16 @@ import { useCustomAlert } from '../context/CustomAlertContext';
 import { useProfileCheck } from '../hooks/useProfileCheck';
 import { getItemTotals } from '../utils/orderUtils';
 
+const getRiderDeliveryFee = (order: {
+  rider_delivery_fee?: number | string | null;
+  delivery_fee?: number | string | null;
+}) => {
+  const riderFee = Number(order.rider_delivery_fee ?? 0);
+  if (Number.isFinite(riderFee) && riderFee > 0) return riderFee;
+
+  const customerFee = Number(order.delivery_fee ?? 0);
+  return Number.isFinite(customerFee) ? customerFee : 0;
+};
 
 const DeliveriesScreen = ({ navigation }: any) => {
   const insets = useSafeAreaInsets();
@@ -343,11 +353,11 @@ const DeliveriesScreen = ({ navigation }: any) => {
                                   <View style={{ alignItems: 'flex-end', flexDirection: 'row', gap: 6 }}>
                                     {discounted < original ? (
                                       <>
-                                        <Text style={styles.productPrice}>₹{Math.round(discounted)}</Text>
-                                        <Text style={[styles.productPrice, { textDecorationLine: 'line-through', color: Colors.textSecondary, fontSize: 11 }]}>₹{original}</Text>
+                                        <Text style={styles.productPrice}>₹{Number(discounted).toFixed(2)}</Text>
+                                        <Text style={[styles.productPrice, { textDecorationLine: 'line-through', color: Colors.textSecondary, fontSize: 11 }]}>₹{Number(original).toFixed(2)}</Text>
                                       </>
                                     ) : (
-                                      <Text style={styles.productPrice}>₹{original}</Text>
+                                      <Text style={styles.productPrice}>₹{Number(original).toFixed(2)}</Text>
                                     )}
                                   </View>
                                 </View>
@@ -477,7 +487,7 @@ const DeliveriesScreen = ({ navigation }: any) => {
                   <Icon name="cash-multiple" size={24} color={Colors.warning} />
                   <View style={styles.paymentAlertTextContainer}>
                     <Text style={styles.paymentAlertTitle}>COLLECT FROM CUSTOMER</Text>
-                    <Text style={styles.paymentAlertAmount}>₹{order.total_amount}</Text>
+                    <Text style={styles.paymentAlertAmount}>₹{Number(order.total_amount).toFixed(2)}</Text>
                     <Text style={styles.paymentAlertNote}>(Final Total After All Offers)</Text>
                   </View>
                 </View>
@@ -510,13 +520,13 @@ const DeliveriesScreen = ({ navigation }: any) => {
                  <View>
                    <Text style={styles.totalLabel}>Total Price</Text>
                    <TouchableOpacity 
-                     onPress={() => setBreakdownModal({ visible: true, order: order })}
+                     onPress={() => setBreakdownModal({ visible: true, order: { ...order, delivery_fee: getRiderDeliveryFee(order) } })}
                    >
                      <Text style={styles.viewSharesText}>View Shares</Text>
                    </TouchableOpacity>
                  </View>
                  <View style={{ alignItems: 'flex-end' }}>
-                   <Text style={styles.grandTotal}>₹{Number(order.total_amount).toFixed(0)}</Text>
+                   <Text style={styles.grandTotal}>₹{Number(order.total_amount).toFixed(2)}</Text>
                  </View>
               </View>
            </View>
@@ -693,23 +703,18 @@ const DeliveriesScreen = ({ navigation }: any) => {
 
                 if (storeShares[sName] === undefined) {
                   storeShares[sName] = 0;
-                  const deliveryFeePaidByStore = order.store_delivery_fees?.[sId] || (order.applied_offers?.[`${sId}_delivery`] ? 25 : 0);
+                  const deliveryFeePaidByStore = Number(order.store_delivery_fees?.[sId] || 0);
                   storeShares[sName] -= deliveryFeePaidByStore;
                   totalSponsoredDelivery += deliveryFeePaidByStore;
                 }
                 storeShares[sName] += discounted;
               });
 
-              let displayDeliveryFee = order.delivery_fee || 0;
+              let displayDeliveryFee = getRiderDeliveryFee(order);
               let displayPlatformFee = order.platform_fee || 0;
 
               if (totalSponsoredDelivery > 0) {
-                if (displayDeliveryFee === 0) {
-                  displayDeliveryFee = 25;
-                  displayPlatformFee += (totalSponsoredDelivery - 25);
-                } else {
-                  displayPlatformFee += totalSponsoredDelivery;
-                }
+                displayPlatformFee += Math.max(0, totalSponsoredDelivery - displayDeliveryFee);
               }
 
               return (
@@ -719,7 +724,7 @@ const DeliveriesScreen = ({ navigation }: any) => {
                     {Object.entries(storeShares).map(([name, amount], idx) => (
                       <View key={idx} style={[styles.breakdownRow, { marginBottom: 8 }]}>
                         <Text style={[styles.breakdownLabel, { color: Colors.text, textTransform: 'none', fontSize: 14, fontWeight: '600' }]}>{name}</Text>
-                        <Text style={[styles.breakdownValue, { fontSize: 14 }]}>₹{Math.round(amount)}</Text>
+                        <Text style={[styles.breakdownValue, { fontSize: 14 }]}>₹{amount.toFixed(2)}</Text>
                       </View>
                     ))}
                   </View>
@@ -729,26 +734,26 @@ const DeliveriesScreen = ({ navigation }: any) => {
                     {displayDeliveryFee > 0 && (
                       <View style={[styles.breakdownRow, { marginBottom: 8 }]}>
                         <Text style={[styles.breakdownLabel, { color: Colors.text, textTransform: 'none', fontSize: 14, fontWeight: '600' }]}>Delivery Fee</Text>
-                        <Text style={[styles.breakdownValue, { fontSize: 14 }]}>₹{displayDeliveryFee}</Text>
+                        <Text style={[styles.breakdownValue, { fontSize: 14 }]}>₹{displayDeliveryFee.toFixed(2)}</Text>
                       </View>
                     )}
                     {displayPlatformFee > 0 && (
                       <View style={[styles.breakdownRow, { marginBottom: 8 }]}>
                         <Text style={[styles.breakdownLabel, { color: Colors.text, textTransform: 'none', fontSize: 14, fontWeight: '600' }]}>Platform Fee</Text>
-                        <Text style={[styles.breakdownValue, { fontSize: 14 }]}>₹{displayPlatformFee}</Text>
+                        <Text style={[styles.breakdownValue, { fontSize: 14 }]}>₹{displayPlatformFee.toFixed(2)}</Text>
                       </View>
                     )}
                     {order.helper_fee > 0 && (
                       <View style={[styles.breakdownRow, { marginBottom: 8 }]}>
                         <Text style={[styles.breakdownLabel, { color: Colors.text, textTransform: 'none', fontSize: 14, fontWeight: '600' }]}>Helper Fee</Text>
-                        <Text style={[styles.breakdownValue, { fontSize: 14 }]}>₹{order.helper_fee}</Text>
+                        <Text style={[styles.breakdownValue, { fontSize: 14 }]}>₹{Number(order.helper_fee).toFixed(2)}</Text>
                       </View>
                     )}
                   </View>
 
                   <View style={styles.grandTotalRowModal}>
                     <Text style={styles.grandTotalLabelModal}>Grand Total</Text>
-                    <Text style={styles.grandTotalValueModal}>₹{Math.round(order.total_amount)}</Text>
+                    <Text style={styles.grandTotalValueModal}>₹{Number(order.total_amount).toFixed(2)}</Text>
                   </View>
                 </ScrollView>
               );
