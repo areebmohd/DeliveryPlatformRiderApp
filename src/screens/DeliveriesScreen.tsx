@@ -15,10 +15,13 @@ import {
 import { supabase } from '../lib/supabaseClient';
 import { Colors, Spacing, BorderRadius } from '../theme/colors';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCustomAlert } from '../context/CustomAlertContext';
 import { useProfileCheck } from '../hooks/useProfileCheck';
 import { getItemTotals } from '../utils/orderUtils';
+import QRCode from 'react-native-qrcode-svg';
+
+const PAYMENT_UPI_ID = 'Q369351522@ybl';
+const PAYMENT_PAYEE_NAME = 'Delivery Platform';
 
 const getRiderDeliveryFee = (order: {
   rider_delivery_fee?: number | string | null;
@@ -31,8 +34,21 @@ const getRiderDeliveryFee = (order: {
   return Number.isFinite(customerFee) ? customerFee : 0;
 };
 
+const buildUpiPaymentUri = (upiId: string, payeeName: string, order: any) => {
+  const amount = Number(order.total_amount || 0).toFixed(2);
+  const orderLabel = order.order_number ? `Order ${order.order_number}` : 'Delivery order';
+  const params = new URLSearchParams({
+    pa: upiId,
+    pn: payeeName || PAYMENT_PAYEE_NAME,
+    am: amount,
+    cu: 'INR',
+    tn: `${orderLabel} payment`,
+  });
+
+  return `upi://pay?${params.toString()}`;
+};
+
 const DeliveriesScreen = ({ navigation }: any) => {
-  const insets = useSafeAreaInsets();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [orders, setOrders] = useState<any[]>([]);
@@ -43,6 +59,11 @@ const DeliveriesScreen = ({ navigation }: any) => {
   const [breakdownModal, setBreakdownModal] = useState<{ visible: boolean; order: any }>({ 
     visible: false, 
     order: null 
+  });
+  const [qrModal, setQrModal] = useState<{ visible: boolean; order: any; upiUri: string }>({
+    visible: false,
+    order: null,
+    upiUri: '',
   });
 
   const fetchOrders = useCallback(async () => {
@@ -512,6 +533,17 @@ const DeliveriesScreen = ({ navigation }: any) => {
                  </View>
               </View>
            </View>
+
+          {order.status === 'delivered' && order.payment_method === 'pay_on_delivery' && (
+            <TouchableOpacity
+              style={styles.showQrBtn}
+              onPress={() => handleShowPaymentQr(order)}
+              activeOpacity={0.85}
+            >
+              <Icon name="qrcode-scan" size={20} color={Colors.white} />
+              <Text style={styles.showQrBtnText}>Show QR</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
     );
@@ -615,6 +647,14 @@ const DeliveriesScreen = ({ navigation }: any) => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleShowPaymentQr = (order: any) => {
+    setQrModal({
+      visible: true,
+      order,
+      upiUri: buildUpiPaymentUri(PAYMENT_UPI_ID, PAYMENT_PAYEE_NAME, order),
+    });
   };
 
   const renderSectionHeader = ({ section: { title } }: any) => (
@@ -749,6 +789,53 @@ const DeliveriesScreen = ({ navigation }: any) => {
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
+      </Modal>
+
+      <Modal
+        visible={qrModal.visible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setQrModal({ visible: false, order: null, upiUri: '' })}
+      >
+        <View style={styles.qrModalOverlay}>
+          <View style={styles.qrModalContent}>
+            <View style={styles.qrModalHeader}>
+              <View>
+                <Text style={styles.qrModalTitle}>Customer Payment QR</Text>
+                <Text style={styles.qrModalSubtitle}>#{qrModal.order?.order_number || 'Order'}</Text>
+              </View>
+              <TouchableOpacity onPress={() => setQrModal({ visible: false, order: null, upiUri: '' })}>
+                <Icon name="close" size={24} color={Colors.text} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.qrAmountBox}>
+              <Text style={styles.qrAmountLabel}>Amount to Pay</Text>
+              <Text style={styles.qrAmountValue}>₹{Number(qrModal.order?.total_amount || 0).toFixed(2)}</Text>
+            </View>
+
+            <View style={styles.qrCodeWrap}>
+              {qrModal.upiUri ? (
+                <QRCode
+                  value={qrModal.upiUri}
+                  size={230}
+                  backgroundColor={Colors.white}
+                  color={Colors.dark}
+                />
+              ) : null}
+            </View>
+
+            <Text style={styles.qrUpiText}>{PAYMENT_UPI_ID}</Text>
+            <Text style={styles.qrHintText}>Ask the customer to scan this QR with any UPI app.</Text>
+
+            <TouchableOpacity
+              style={styles.closeBtnModal}
+              onPress={() => setQrModal({ visible: false, order: null, upiUri: '' })}
+            >
+              <Text style={styles.closeBtnTextModal}>Done</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
       </Modal>
     </View>
   );
@@ -1076,6 +1163,21 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 16,
   },
+  showQrBtn: {
+    marginTop: Spacing.md,
+    backgroundColor: Colors.primary,
+    borderRadius: BorderRadius.md,
+    paddingVertical: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 8,
+  },
+  showQrBtnText: {
+    color: Colors.white,
+    fontWeight: '800',
+    fontSize: 16,
+  },
   paymentBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1337,6 +1439,76 @@ const styles = StyleSheet.create({
     color: Colors.white,
     fontWeight: '800',
     fontSize: 16,
+  },
+  qrModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
+    justifyContent: 'center',
+    paddingHorizontal: Spacing.lg,
+  },
+  qrModalContent: {
+    backgroundColor: Colors.white,
+    borderRadius: BorderRadius.xl,
+    padding: Spacing.lg,
+  },
+  qrModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: Spacing.md,
+  },
+  qrModalTitle: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: Colors.text,
+  },
+  qrModalSubtitle: {
+    fontSize: 13,
+    color: Colors.textSecondary,
+    fontWeight: '700',
+    marginTop: 2,
+  },
+  qrAmountBox: {
+    backgroundColor: Colors.primaryLight,
+    borderRadius: BorderRadius.md,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginBottom: Spacing.lg,
+  },
+  qrAmountLabel: {
+    fontSize: 11,
+    color: Colors.textSecondary,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+  },
+  qrAmountValue: {
+    fontSize: 28,
+    color: Colors.primary,
+    fontWeight: '900',
+    marginTop: 2,
+  },
+  qrCodeWrap: {
+    alignSelf: 'center',
+    backgroundColor: Colors.white,
+    padding: Spacing.md,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  qrUpiText: {
+    marginTop: Spacing.md,
+    textAlign: 'center',
+    fontSize: 14,
+    color: Colors.text,
+    fontWeight: '800',
+  },
+  qrHintText: {
+    marginTop: 6,
+    textAlign: 'center',
+    fontSize: 12,
+    color: Colors.textSecondary,
+    fontWeight: '600',
+    marginBottom: Spacing.sm,
   },
 });
 
