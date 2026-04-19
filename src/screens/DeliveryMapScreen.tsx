@@ -43,8 +43,27 @@ const DeliveryMapScreen = ({ route, navigation }: any) => {
       { enableHighAccuracy: true, distanceFilter: 10 }
     );
 
-    return () => Geolocation.clearWatch(watchId);
-  }, []);
+    // Real-time subscription for order updates (including pickup status)
+    const ordersSubscription = supabase
+      .channel('map_orders_updates')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => {
+        fetchActiveOrders();
+      })
+      .subscribe();
+
+    const itemsSubscription = supabase
+      .channel('map_items_updates')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'order_items' }, () => {
+        fetchActiveOrders();
+      })
+      .subscribe();
+
+    return () => {
+      Geolocation.clearWatch(watchId);
+      ordersSubscription.unsubscribe();
+      itemsSubscription.unsubscribe();
+    };
+  }, [orderId]);
 
   const [nextRouteLine, setNextRouteLine] = useState<any>(null);
   const [lastStopsHash, setLastStopsHash] = useState<string>('');
@@ -151,6 +170,7 @@ const DeliveryMapScreen = ({ route, navigation }: any) => {
           customer:profiles!orders_customer_id_fkey (phone, full_name),
           order_items (
             product_id,
+            is_picked_up,
             products (
               stores (id, name, location, address)
             )
@@ -164,7 +184,7 @@ const DeliveryMapScreen = ({ route, navigation }: any) => {
       const orders = data || [];
       setActiveOrders(orders);
 
-      // Extract unique stores
+      // Extract unique stores (all stores from active orders)
       const storeMap = new Map();
       orders.forEach(order => {
         // Direct store from store_id
@@ -322,14 +342,30 @@ const DeliveryMapScreen = ({ route, navigation }: any) => {
         {stores.map((store) => {
           const loc = parseLocation(store.location);
           if (!loc) return null;
+
+          // Determine if this store is fully picked up for all active orders
+          const isFullyPickedUp = activeOrders.every(order => {
+            const storeItems = order.order_items?.filter((oi: any) => 
+              (oi.products?.stores?.id || order.stores?.id) === store.id
+            ) || [];
+            return storeItems.length > 0 ? storeItems.every((oi: any) => oi.is_picked_up) : true;
+          });
+
           return (
             <PointAnnotation
               key={`store-${store.id}`}
               id={`store-${store.id}`}
               coordinate={[loc.longitude, loc.latitude]}
             >
-              <View style={[styles.marker, { backgroundColor: Colors.warning }]}>
-                <Icon name="store" size={20} color={Colors.dark} />
+              <View style={[
+                styles.marker, 
+                { backgroundColor: isFullyPickedUp ? Colors.border : Colors.warning }
+              ]}>
+                <Icon 
+                  name={isFullyPickedUp ? "store-check" : "store"} 
+                  size={20} 
+                  color={isFullyPickedUp ? Colors.textSecondary : Colors.dark} 
+                />
               </View>
             </PointAnnotation>
           );

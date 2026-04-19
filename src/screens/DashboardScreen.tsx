@@ -24,6 +24,37 @@ interface DashboardStats {
   acceptance_rate: number;
 }
 
+const RIDER_PRO_TIPS = [
+  {
+    id: '1',
+    title: 'Acceptance Rate',
+    text: 'High acceptance rate helps you get priority for new available orders in your area!',
+    icon: 'trending-up',
+    color: Colors.warning,
+  },
+  {
+    id: '2',
+    title: 'Product Verification',
+    text: 'Properly check and verify all products when picking up from stores, including their working and expiry dates.',
+    icon: 'clipboard-check-outline',
+    color: '#3b82f6',
+  },
+  {
+    id: '3',
+    title: 'Customer Verification',
+    text: 'Ask the customer to check and verify products again during delivery to avoid any complaints.',
+    icon: 'account-check-outline',
+    color: '#10b981',
+  },
+  {
+    id: '4',
+    title: 'Payment Verification',
+    text: 'Always verify payment is received from customer in PhonePe Business during delivery.',
+    icon: 'shield-check-outline',
+    color: '#8b5cf6',
+  },
+];
+
 const DashboardScreen = () => {
   const { showAlert } = useCustomAlert();
   const [loading, setLoading] = useState(true);
@@ -162,17 +193,33 @@ const DashboardScreen = () => {
         </View>
 
         {/* Tip/Info Section */}
-        <View style={styles.infoCard}>
-          <View style={styles.infoIconBox}>
-             <Icon name="lightbulb-on" size={24} color={Colors.warning} />
-          </View>
-          <View style={styles.infoContent}>
-            <Text style={styles.infoTitle}>Rider Pro Tip</Text>
-            <Text style={styles.infoText}>
-              High acceptance rate helps you get priority for new available orders in your area!
-            </Text>
+        <View style={styles.tipsHeader}>
+          <Text style={styles.tipsSectionTitle}>Rider Pro Tips</Text>
+          <View style={styles.tipsBadge}>
+            <Text style={styles.tipsBadgeText}>{RIDER_PRO_TIPS.length} Tips</Text>
           </View>
         </View>
+
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.tipsScrollView}
+          contentContainerStyle={styles.tipsCarousel}
+          snapToInterval={width * 0.85 + Spacing.md}
+          decelerationRate="fast"
+        >
+          {RIDER_PRO_TIPS.map((tip) => (
+            <View key={tip.id} style={[styles.tipCard, { borderBottomColor: tip.color }]}>
+              <View style={styles.tipCardHeader}>
+                <View style={[styles.tipIconBox, { backgroundColor: tip.color + '15' }]}>
+                  <Icon name={tip.icon} size={22} color={tip.color} />
+                </View>
+                <Text style={[styles.tipTitle, { color: tip.color }]}>{tip.title}</Text>
+              </View>
+              <Text style={styles.tipText}>{tip.text}</Text>
+            </View>
+          ))}
+        </ScrollView>
         
         <View style={styles.footerSpacer} />
       </ScrollView>
@@ -349,6 +396,75 @@ const styles = StyleSheet.create({
   },
   footerSpacer: {
     height: 60,
+  },
+  tipsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Spacing.sm,
+    marginTop: Spacing.md,
+    marginBottom: Spacing.sm,
+  },
+  tipsSectionTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: Colors.text,
+  },
+  tipsBadge: {
+    backgroundColor: Colors.primaryLight,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.pill,
+  },
+  tipsBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.primary,
+  },
+  tipsCarousel: {
+    paddingHorizontal: Spacing.md,
+    gap: Spacing.md,
+    paddingVertical: Spacing.xs,
+  },
+  tipsScrollView: {
+    marginHorizontal: -Spacing.md,
+  },
+  tipCard: {
+    width: width * 0.85,
+    backgroundColor: Colors.white,
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.md,
+    elevation: 2,
+    shadowColor: Colors.black,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    borderBottomWidth: 4,
+  },
+  tipCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  tipIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 10,
+  },
+  tipTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  tipText: {
+    fontSize: 14,
+    color: Colors.textSecondary,
+    lineHeight: 20,
+    fontWeight: '500',
   },
 });
 

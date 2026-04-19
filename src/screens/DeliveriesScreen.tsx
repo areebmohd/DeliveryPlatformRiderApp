@@ -239,25 +239,7 @@ const DeliveriesScreen = ({ navigation }: any) => {
                 </Text>
               </View>
 
-              <View style={[
-                styles.paymentBadge,
-                order.payment_status === 'verified' ? styles.paidBadge : styles.unpaidBadge
-              ]}>
-                <Text style={[
-                  styles.paymentBadgeText,
-                  order.payment_status === 'verified' ? styles.paidText : styles.unpaidText
-                ]}>
-                  {order.payment_status === 'verified' ? 'PAID' : (order.payment_method === 'pay_on_delivery' ? 'POD' : (order.payment_method === 'pay_online' ? 'ONLINE' : 'PENDING'))}
-                </Text>
-              </View>
             </View>
-
-            {order.payment_method === 'pay_online' && order.utr_number && (
-              <Text style={styles.paymentMetaText}>UTR: {order.utr_number}</Text>
-            )}
-            {order.payment_method === 'pay_online' && order.payer_name && (
-              <Text style={styles.paymentMetaText}>Payer: {order.payer_name}</Text>
-            )}
           </View>
           {!isHistory && (
             <TouchableOpacity 
@@ -482,7 +464,7 @@ const DeliveriesScreen = ({ navigation }: any) => {
 
           {order.rider_id && order.status === 'picked_up' && (
             <View style={styles.otpSection}>
-              {order.payment_method === 'pay_on_delivery' && order.payment_status === 'pending' && (
+              {order.payment_method === 'pay_on_delivery' && (
                 <View style={styles.paymentAlert}>
                   <Icon name="cash-multiple" size={24} color={Colors.warning} />
                   <View style={styles.paymentAlertTextContainer}>
@@ -836,7 +818,7 @@ const styles = StyleSheet.create({
   orderHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     marginBottom: 4,
   },
   orderNumber: {
@@ -1253,6 +1235,7 @@ const styles = StyleSheet.create({
   totalContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center',
     width: '100%',
   },
   totalLabel: {

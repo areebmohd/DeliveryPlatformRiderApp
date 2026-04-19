@@ -139,7 +139,7 @@ const PaymentsScreen = ({ navigation }: any) => {
           <View style={styles.summaryContainer}>
             <View style={styles.mainSummaryCard}>
               <Text style={styles.summaryLabel}>Lifetime Earnings</Text>
-              <Text style={styles.totalEarnedText}>₹{lifetimeEarnings.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</Text>
+              <Text style={styles.totalEarnedText}>₹{lifetimeEarnings.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text>
               {lastPayout && (
                 <View style={styles.lastPayoutContainer}>
                   <Icon name="clock-check-outline" size={12} color={Colors.white + '90'} />
