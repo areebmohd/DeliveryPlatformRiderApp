@@ -86,7 +86,7 @@ const SignUpScreen = ({ navigation }: Props) => {
               showAlert('Welcome Back', 'Your account exists but is not verified. A new verification code has been sent.');
               navigation.navigate('VerifyEmailOTP', { email: email.toLowerCase().trim() });
             }
-          } catch (resendError: any) {
+          } catch {
             showAlert('Account Exists', 'An account with this email already exists. Please login instead.');
           }
           return;
@@ -129,7 +129,7 @@ const SignUpScreen = ({ navigation }: Props) => {
             <Text style={styles.label}>Password</Text>
             <View style={styles.passwordContainer}>
               <TextInput
-                style={[styles.input, { flex: 1, borderWidth: 0 }]}
+                style={styles.passwordInput}
                 placeholder="Min. 8 characters"
                 placeholderTextColor="#999"
                 value={password}
@@ -150,7 +150,7 @@ const SignUpScreen = ({ navigation }: Props) => {
             <Text style={styles.label}>Confirm Password</Text>
             <View style={styles.passwordContainer}>
               <TextInput
-                style={[styles.input, { flex: 1, borderWidth: 0 }]}
+                style={styles.passwordInput}
                 placeholder="Repeat your password"
                 placeholderTextColor="#999"
                 value={confirmPassword}
@@ -224,6 +224,15 @@ const styles = StyleSheet.create({
     color: Colors.text,
     borderWidth: 1,
     borderColor: Colors.border,
+  },
+  passwordInput: {
+    height: UI.inputHeight,
+    backgroundColor: Colors.white,
+    paddingHorizontal: 16,
+    fontSize: 16,
+    color: Colors.text,
+    flex: 1,
+    borderWidth: 0,
   },
   passwordContainer: {
     flexDirection: 'row',

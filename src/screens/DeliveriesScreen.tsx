@@ -17,16 +17,12 @@ import { Colors, Spacing, BorderRadius } from '../theme/colors';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useCustomAlert } from '../context/CustomAlertContext';
 import { useProfileCheck } from '../hooks/useProfileCheck';
-import { getItemTotals } from '../utils/orderUtils';
 import QRCode from 'react-native-qrcode-svg';
 
 const PAYMENT_UPI_ID = 'Q369351522@ybl';
 const PAYMENT_PAYEE_NAME = 'Delivery Platform';
 
-const getRiderDeliveryFee = (order: {
-  rider_delivery_fee?: number | string | null;
-  delivery_fee?: number | string | null;
-}) => {
+const getRiderDeliveryFee = (order: any) => {
   const riderFee = Number(order.rider_delivery_fee ?? 0);
   if (Number.isFinite(riderFee) && riderFee > 0) return riderFee;
 
@@ -48,11 +44,337 @@ const buildUpiPaymentUri = (upiId: string, payeeName: string, order: any) => {
   return `upi://pay?${params.toString()}`;
 };
 
+// --- Sub-components for better performance ---
+
+const ProductItem = React.memo(({ item, items, storeOffer }: any) => {
+  const { original, discounted } = getItemTotals(item, items, storeOffer);
+  
+  return (
+    <View key={item.id} style={styles.productItemContainer}>
+      <View style={styles.productItem}>
+        <Text style={styles.productName}>
+          {item.product_name}
+          {item.selected_options && Object.keys(item.selected_options).length > 0 && (
+            <Text style={styles.itemOptionsText}>
+              {` (${Object.entries(item.selected_options)
+                .map(([k, v]) => k === 'gift' ? 'Gift' : `${v}`)
+                .join(', ')})`}
+            </Text>
+          )}
+          {' '}x {item.quantity}
+        </Text>
+        <View style={styles.productInfoRow}>
+          {item.is_picked_up && (
+            <Icon name="check-circle" size={14} color={Colors.success} style={{ marginRight: 4 }} />
+          )}
+          <View style={{ alignItems: 'flex-end', flexDirection: 'row', gap: 6 }}>
+            {discounted < original ? (
+              <>
+                <Text style={styles.productPrice}>₹{Number(discounted).toFixed(2)}</Text>
+                <Text style={[styles.productPrice, { textDecorationLine: 'line-through', color: Colors.textSecondary, fontSize: 11 }]}>₹{Number(original).toFixed(2)}</Text>
+              </>
+            ) : (
+              <Text style={styles.productPrice}>₹{Number(original).toFixed(2)}</Text>
+            )}
+          </View>
+        </View>
+      </View>
+    </View>
+  );
+});
+
+const StoreSection = React.memo(({ group, gIdx, order, navigation, onStorePickUp }: any) => {
+  const storeOffer = order.applied_offers?.[group.id];
+  const deliveryOffer = order.applied_offers?.[`${group.id}_delivery`];
+  const isHistory = order.status === 'delivered' || order.status === 'cancelled';
+  const allStoreItemsPicked = group.items.length > 0 && group.items.every((item: any) => item.is_picked_up);
+
+  return (
+    <View style={[styles.section, { marginTop: gIdx > 0 ? Spacing.md : 0 }]}>
+      <View style={styles.sectionHeader}>
+        <Icon name="store" size={18} color={Colors.primary} />
+        <Text style={styles.sectionTitle}>Pickup Stop #{gIdx + 1}</Text>
+      </View>
+      <Text style={styles.storeName}>{group.name}</Text>
+      <Text style={styles.addressText}>{group.address}</Text>
+      {group.phone && (
+        <TouchableOpacity onPress={() => Linking.openURL(`tel:${group.phone}`)}>
+          <Text style={styles.phoneText}>
+            <Icon name="phone" size={14} color={Colors.primary} /> {group.phone}
+          </Text>
+        </TouchableOpacity>
+      )}
+
+      {group.items.length > 0 && (
+        <View style={styles.productList}>
+          {group.items.map((item: any) => (
+            <ProductItem key={item.id} item={item} items={group.items} storeOffer={storeOffer} />
+          ))}
+        </View>
+      )}
+
+      <TouchableOpacity 
+        style={styles.viewProductDetailsBtn}
+        onPress={() => navigation.navigate('ProductDetails', { 
+          items: group.items, 
+          storeName: group.name,
+          appliedOffers: order.applied_offers
+        })}
+      >
+        <Text style={styles.viewProductDetailsText}>View Product Images</Text>
+      </TouchableOpacity>
+
+      {(storeOffer || deliveryOffer) && (
+        <View style={styles.offerBadgeContainer}>
+          {storeOffer && (
+            <View style={styles.offerBadge}>
+              <Icon name="ticket-percent-outline" size={14} color="#16a34a" />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.offerBadgeName}>{storeOffer.name || 'Store Offer'}</Text>
+                <Text style={styles.offerBadgeDesc}>
+                  {(() => {
+                    const { type, amount, reward_data } = storeOffer;
+                    const productName = reward_data?.product_name;
+                    switch (type) {
+                      case 'discount': return `${amount}% Instant Discount on Total Items Price`;
+                      case 'free_cash': return `₹${amount} Free Cash amount`;
+                      case 'cheap_product': return `${amount}% Instant Discount on ${productName || 'Some Items'}`;
+                      case 'combo': return `${productName || 'Items'} at Only ₹${amount}`;
+                      case 'fixed_price': return `${productName || 'Selected Items'} at ₹${amount} each`;
+                      case 'free_product': return `Get Free ${productName || 'Gift Item'}`;
+                      default: return 'Special store offer';
+                    }
+                  })()}
+                </Text>
+              </View>
+            </View>
+          )}
+          {deliveryOffer && (
+            <View style={[styles.offerBadge, { backgroundColor: '#fffbeb', borderColor: '#fde68a' }]}>
+              <Icon name="truck-delivery-outline" size={14} color="#d97706" />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.offerBadgeName, { color: '#d97706' }]}>{deliveryOffer.name || 'Free Delivery'}</Text>
+                <Text style={styles.offerBadgeDesc}>₹0 Delivery fee</Text>
+              </View>
+            </View>
+          )}
+        </View>
+      )}
+
+      {order.rider_id && !isHistory && order.status !== 'delivered' && order.status !== 'cancelled' && (
+        allStoreItemsPicked ? (
+          <View style={styles.pickedUpBadge}>
+            <Icon name="check-decagram" size={16} color={Colors.success} />
+            <Text style={styles.pickedUpBadgeText}>PICKED UP FROM {group.name.toUpperCase()}</Text>
+          </View>
+        ) : (
+          <TouchableOpacity 
+            style={styles.storePickupBtn}
+            onPress={() => onStorePickUp(order.id, group.id)}
+          >
+            <Text style={styles.storePickupBtnText}>Mark Picked Up</Text>
+          </TouchableOpacity>
+        )
+      )}
+    </View>
+  );
+});
+
+const OrderCard = React.memo(({ 
+  order, 
+  navigation, 
+  onAccept, 
+  onStorePickUp, 
+  onShowBreakdown, 
+  onComplete, 
+  onShowQr,
+  otpValue,
+  setOtpValue
+}: any) => {
+  const isHistory = order.status === 'delivered' || order.status === 'cancelled';
+  const isAvailable = order.rider_id === null;
+
+  let statusLabel = '';
+  let statusColor = Colors.text;
+  if (order.status === 'waiting_for_pickup') {
+    statusLabel = 'WAITING FOR PICKUP';
+    statusColor = Colors.warning;
+  } else if (order.status === 'picked_up') {
+    statusLabel = 'PICKED UP';
+    statusColor = Colors.primary;
+  } else if (order.status === 'delivered') {
+    statusLabel = 'DELIVERED';
+    statusColor = Colors.success;
+  } else if (order.status === 'cancelled') {
+    statusLabel = 'CANCELLED';
+    statusColor = Colors.danger;
+  }
+
+  const groups = React.useMemo(() => {
+    const g: { [key: string]: any } = {};
+    order.order_items?.filter((oi: any) => !oi.is_removed).forEach((oi: any) => {
+      const store = oi.products?.stores || (Array.isArray(oi.products) ? oi.products[0]?.stores : null) || order.stores;
+      const sId = store?.id || 'unknown';
+      if (!g[sId]) {
+        g[sId] = {
+          id: sId,
+          name: store?.name || 'Unknown Store',
+          address: store?.address || 'N/A',
+          phone: store?.phone,
+          items: []
+        };
+      }
+      g[sId].items.push(oi);
+    });
+
+    if (Object.keys(g).length === 0 && order.stores) {
+      const s = order.stores;
+      const sId = s.id || 'main';
+      g[sId] = {
+        id: sId,
+        name: s.name || 'Unknown Store',
+        address: s.address || 'N/A',
+        phone: s.phone,
+        items: []
+      };
+    }
+    return Object.values(g);
+  }, [order.order_items, order.stores]);
+
+  return (
+    <View style={[styles.orderCard, isHistory && styles.historyCard]}>
+      <View style={styles.orderHeader}>
+        <View>
+          <Text style={styles.orderNumber}>#{order.order_number}</Text>
+          <View style={styles.badgeContainer}>
+            <View style={[
+              styles.statusBadge, 
+              order.status === 'delivered' ? styles.successBadge : 
+              order.status === 'cancelled' ? styles.errorBadge : 
+              order.status === 'picked_up' ? styles.pickedUpStatusBadge : 
+              styles.waitingBadge
+            ]}>
+              <Text style={[styles.statusText, { color: statusColor }]}>{statusLabel}</Text>
+            </View>
+          </View>
+        </View>
+        {!isHistory && (
+          <TouchableOpacity 
+             style={styles.mapBtn}
+             onPress={() => navigation.navigate('DeliveryMap', { orderId: order.id })}
+          >
+            <Icon name="map-marker-path" size={20} color={Colors.white} />
+            <Text style={styles.mapBtnText}>Map</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
+      <View style={styles.divider} />
+
+      {groups.map((group, idx) => (
+        <StoreSection 
+          key={idx} 
+          group={group} 
+          gIdx={idx} 
+          order={order} 
+          navigation={navigation} 
+          onStorePickUp={onStorePickUp} 
+        />
+      ))}
+
+      {isAvailable && (
+        <TouchableOpacity style={styles.acceptBtn} onPress={() => onAccept(order.id)}>
+          <Text style={styles.acceptBtnText}>Accept Delivery</Text>
+        </TouchableOpacity>
+      )}
+
+      <View style={styles.divider} />
+
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Icon name="account" size={18} color={Colors.success} />
+          <Text style={styles.sectionTitle}>Deliver to Customer</Text>
+        </View>
+        <Text style={styles.customerName}>
+          {order.customer?.full_name || (Array.isArray(order.customer) ? order.customer[0]?.full_name : 'Customer')}
+        </Text>
+        <Text style={styles.addressText}>{order.addresses?.address_line}, {order.addresses?.city}</Text>
+        <TouchableOpacity 
+          onPress={() => {
+            const phone = order.customer?.phone || (Array.isArray(order.customer) ? order.customer[0]?.phone : null);
+            if (phone) Linking.openURL(`tel:${phone}`);
+          }}
+          disabled={!(order.customer?.phone || (Array.isArray(order.customer) ? order.customer[0]?.phone : null))}
+        >
+          <Text style={styles.phoneText}>
+            <Icon name="phone" size={14} color={Colors.primary} /> { (order.customer?.phone || (Array.isArray(order.customer) ? order.customer[0]?.phone : null)) || 'Phone unavailable' }
+          </Text>
+        </TouchableOpacity>
+
+        {order.rider_id && order.status === 'picked_up' && (
+          <View style={styles.otpSection}>
+            {order.payment_method === 'pay_on_delivery' && (
+              <View style={styles.paymentAlert}>
+                <Icon name="cash-multiple" size={24} color={Colors.warning} />
+                <View style={styles.paymentAlertTextContainer}>
+                  <Text style={styles.paymentAlertTitle}>COLLECT FROM CUSTOMER</Text>
+                  <Text style={styles.paymentAlertAmount}>₹{Number(order.total_amount).toFixed(2)}</Text>
+                  <Text style={styles.paymentAlertNote}>(Final Total After All Offers)</Text>
+                </View>
+              </View>
+            )}
+            
+            <Text style={styles.otpLabel}>Enter Delivery OTP</Text>
+            <View style={styles.otpRow}>
+              <TextInput
+                style={styles.otpInput}
+                placeholder="4-digit"
+                keyboardType="number-pad"
+                maxLength={4}
+                value={otpValue || ''}
+                onChangeText={setOtpValue}
+              />
+              <TouchableOpacity 
+                style={styles.completeBtn}
+                onPress={() => onComplete(order.id, order.delivery_otp)}
+              >
+                <Text style={styles.completeBtnText}>Complete</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
+        <View style={styles.divider} />
+        
+        <View style={styles.cardFooter}>
+            <View style={styles.totalContainer}>
+               <View>
+                 <Text style={styles.totalLabel}>Total Price</Text>
+                 <TouchableOpacity onPress={() => onShowBreakdown(order)}>
+                   <Text style={styles.viewSharesText}>View Shares</Text>
+                 </TouchableOpacity>
+               </View>
+               <View style={{ alignItems: 'flex-end' }}>
+                 <Text style={styles.grandTotal}>₹{Number(order.total_amount).toFixed(2)}</Text>
+               </View>
+            </View>
+         </View>
+
+        {order.status === 'delivered' && order.payment_method === 'pay_on_delivery' && (
+          <TouchableOpacity style={styles.showQrBtn} onPress={() => onShowQr(order)} activeOpacity={0.85}>
+            <Icon name="qrcode-scan" size={20} color={Colors.white} />
+            <Text style={styles.showQrBtnText}>Show QR</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    </View>
+  );
+});
+
 const DeliveriesScreen = ({ navigation }: any) => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [orders, setOrders] = useState<any[]>([]);
-  const [sections, setSections] = useState<any[]>([]);
   const [otpInputs, setOtpInputs] = useState<{ [key: string]: string }>({});
   const { showAlert } = useCustomAlert();
   const { checkProfileCompleteness } = useProfileCheck();
@@ -71,7 +393,6 @@ const DeliveriesScreen = ({ navigation }: any) => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Check if rider has any active orders
       const { data: activeOrders, error: activeError } = await supabase
         .from('orders')
         .select(`
@@ -101,7 +422,6 @@ const DeliveriesScreen = ({ navigation }: any) => {
 
       let fetchedOrders: any[] = activeOrders || [];
       
-      // 2. Fetch rider's vehicle type
       const { data: riderProfile } = await supabase
         .from('rider_profiles')
         .select('vehicle_type')
@@ -110,36 +430,31 @@ const DeliveriesScreen = ({ navigation }: any) => {
       
       const vehicleType = (riderProfile?.vehicle_type || 'bike').toLowerCase();
       
-      // 3. Look for unassigned orders matching vehicle type
       const { data: availableOrders, error: availableError } = await supabase
         .rpc('get_nearby_unassigned_orders', { rider_vehicle_type: vehicleType });
 
       if (availableError) {
-        console.error('Error fetching available orders:', availableError);
+        // Reduced log noise
       } else if (availableOrders) {
-        // Avoid duplicates if any, though active orders should have rider_id set
         const availableIds = new Set(fetchedOrders.map(o => o.id));
         const filteredAvailable = availableOrders.filter((o: any) => !availableIds.has(o.id));
         fetchedOrders = [...fetchedOrders, ...filteredAvailable];
 
-        // Log these as "offers" for the rider to track acceptance rate
         if (availableOrders.length > 0) {
           const offers = availableOrders.map((o: any) => ({
             rider_id: user.id,
             order_id: o.id
           }));
           
-          // Use insert with then() to run in background without blocking UI
           supabase
             .from('rider_offer_logs')
             .upsert(offers, { onConflict: 'rider_id, order_id' })
-            .then(({ error }) => {
-               if (error) console.error('Error logging offers:', error.message);
+            .then(({ error: _error }) => {
+               if (_error) console.error('Error logging offers:', _error.message);
             });
         }
       }
 
-      // Also fetch delivered/cancelled orders for history (optional, let's keep it simple)
       const { data: historyOrders } = await supabase
         .from('orders')
         .select(`
@@ -171,47 +486,7 @@ const DeliveriesScreen = ({ navigation }: any) => {
         fetchedOrders = [...fetchedOrders, ...historyOrders];
       }
       setOrders(fetchedOrders);
-
-      // Group by date
-      const grouped: { [key: string]: any[] } = {};
-      fetchedOrders.forEach(order => {
-        const date = new Date(order.created_at);
-        const dateStr = date.toDateString();
-        
-        let label = dateStr;
-        const today = new Date().toDateString();
-        const yesterday = new Date(Date.now() - 86400000).toDateString();
-        
-        if (dateStr === today) label = 'Today';
-        else if (dateStr === yesterday) label = 'Yesterday';
-
-        if (!grouped[label]) grouped[label] = [];
-        grouped[label].push(order);
-      });
-
-      // Sort labels: Today, Yesterday, then descending date
-      const sortedLabels = Object.keys(grouped).sort((a, b) => {
-        if (a === 'Today') return -1;
-        if (b === 'Today') return 1;
-        if (a === 'Yesterday') return -1;
-        if (b === 'Yesterday') return 1;
-        return new Date(b).getTime() - new Date(a).getTime();
-      });
-
-      const sectionData = sortedLabels.map(key => ({
-        title: key,
-        data: grouped[key].sort((a: any, b: any) => {
-          const isAHistory = a.status === 'delivered' || a.status === 'cancelled';
-          const isBHistory = b.status === 'delivered' || b.status === 'cancelled';
-          if (isAHistory && !isBHistory) return 1;
-          if (!isAHistory && isBHistory) return -1;
-          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-        }),
-      }));
-
-      setSections(sectionData);
-    } catch (error: any) {
-      console.error('Error fetching orders:', error.message);
+    } catch {
       showAlert('Error', 'Failed to fetch orders. Please try again.');
     } finally {
       setLoading(false);
@@ -219,334 +494,48 @@ const DeliveriesScreen = ({ navigation }: any) => {
     }
   }, [showAlert]);
 
-  const renderOrder = (order: any) => {
-    const isHistory = order.status === 'delivered' || order.status === 'cancelled';
-    const isAvailable = order.rider_id === null;
+  const sections = React.useMemo(() => {
+    const grouped: { [key: string]: any[] } = {};
+    orders.forEach(order => {
+      const date = new Date(order.created_at);
+      const dateStr = date.toDateString();
+      
+      let label = dateStr;
+      const today = new Date().toDateString();
+      const yesterday = new Date(Date.now() - 86400000).toDateString();
+      
+      if (dateStr === today) label = 'Today';
+      else if (dateStr === yesterday) label = 'Yesterday';
 
-    let statusLabel = '';
-    let statusColor = Colors.text;
-    if (order.status === 'waiting_for_pickup') {
-      statusLabel = 'WAITING FOR PICKUP';
-      statusColor = Colors.warning;
-    } else if (order.status === 'picked_up') {
-      statusLabel = 'PICKED UP';
-      statusColor = Colors.primary;
-    } else if (order.status === 'delivered') {
-      statusLabel = 'DELIVERED';
-      statusColor = Colors.success;
-    } else if (order.status === 'cancelled') {
-      statusLabel = 'CANCELLED';
-      statusColor = Colors.danger;
-    }
+      if (!grouped[label]) grouped[label] = [];
+      grouped[label].push(order);
+    });
 
-    return (
-      <View key={order.id} style={[styles.orderCard, isHistory && styles.historyCard]}>
-        <View style={styles.orderHeader}>
-          <View>
-            <Text style={styles.orderNumber}>#{order.order_number}</Text>
-            <View style={styles.badgeContainer}>
-              <View style={[
-                styles.statusBadge, 
-                order.status === 'delivered' ? styles.successBadge : 
-                order.status === 'cancelled' ? styles.errorBadge : 
-                order.status === 'picked_up' ? styles.pickedUpStatusBadge : 
-                styles.waitingBadge
-              ]}>
-                <Text style={[
-                  styles.statusText,
-                  { color: statusColor }
-                ]}>
-                  {statusLabel}
-                </Text>
-              </View>
+    const sortedLabels = Object.keys(grouped).sort((a, b) => {
+      if (a === 'Today') return -1;
+      if (b === 'Today') return 1;
+      if (a === 'Yesterday') return -1;
+      if (b === 'Yesterday') return 1;
+      return new Date(b).getTime() - new Date(a).getTime();
+    });
 
-            </View>
-          </View>
-          {!isHistory && (
-            <TouchableOpacity 
-               style={styles.mapBtn}
-               onPress={() => navigation.navigate('DeliveryMap', { orderId: order.id })}
-            >
-              <Icon name="map-marker-path" size={20} color={Colors.white} />
-              <Text style={styles.mapBtnText}>Map</Text>
-            </TouchableOpacity>
-          )}
-        </View>
+    return sortedLabels.map(key => ({
+      title: key,
+      data: grouped[key].sort((a: any, b: any) => {
+        const isAHistory = a.status === 'delivered' || a.status === 'cancelled';
+        const isBHistory = b.status === 'delivered' || b.status === 'cancelled';
+        if (isAHistory && !isBHistory) return 1;
+        if (!isAHistory && isBHistory) return -1;
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      }),
+    }));
+  }, [orders]);
 
-        <View style={styles.divider} />
-
-        {/* Store Details (Grouped) */}
-        {(() => {
-          const groups: { [key: string]: { id: string, name: string, address: string, phone?: string, items: any[] } } = {};
-          order.order_items?.filter((oi: any) => !oi.is_removed).forEach((oi: any) => {
-            const store = oi.products?.stores || (Array.isArray(oi.products) ? oi.products[0]?.stores : null) || order.stores;
-            const sId = store?.id || 'unknown';
-            if (!groups[sId]) {
-              groups[sId] = {
-                id: sId,
-                name: store?.name || 'Unknown Store',
-                address: store?.address || 'N/A',
-                phone: store?.phone,
-                items: []
-              };
-            }
-            groups[sId].items.push(oi);
-          });
-
-          // Fallback if no items but store exists
-          if (Object.keys(groups).length === 0 && order.stores) {
-            const s = order.stores;
-            const sId = s.id || 'main';
-            groups[sId] = {
-              id: sId,
-              name: s.name || 'Unknown Store',
-              address: s.address || 'N/A',
-              phone: s.phone,
-              items: []
-            };
-          }
-
-          return Object.values(groups).map((group, gIdx) => (
-            <View key={gIdx} style={[styles.section, { marginTop: gIdx > 0 ? Spacing.md : 0 }]}>
-              <View style={styles.sectionHeader}>
-                <Icon name="store" size={18} color={Colors.primary} />
-                <Text style={styles.sectionTitle}>Pickup Stop #{gIdx + 1}</Text>
-              </View>
-              <Text style={styles.storeName}>{group.name}</Text>
-              <Text style={styles.addressText}>{group.address}</Text>
-              {group.phone && (
-                <TouchableOpacity onPress={() => Linking.openURL(`tel:${group.phone}`)}>
-                  <Text style={styles.phoneText}>
-                    <Icon name="phone" size={14} color={Colors.primary} /> {group.phone}
-                  </Text>
-                </TouchableOpacity>
-              )}
-
-              {/* Find offers for this specific store */}
-              {(() => {
-                const storeOffer = order.applied_offers?.[group.id];
-                const deliveryOffer = order.applied_offers?.[`${group.id}_delivery`];
-                
-                return (
-                  <>
-                    {group.items.length > 0 && (
-                      <View style={styles.productList}>
-                        {group.items.map((item: any) => {
-                          const storeOffer = order.applied_offers?.[group.id];
-                          const { original, discounted } = getItemTotals(item, group.items, storeOffer);
-
-                          return (
-                            <View key={item.id} style={styles.productItemContainer}>
-                              <View style={styles.productItem}>
-                                <Text style={styles.productName}>
-                                  {item.product_name}
-                                  {item.selected_options && Object.keys(item.selected_options).length > 0 && (
-                                    <Text style={styles.itemOptionsText}>
-                                      {` (${Object.entries(item.selected_options)
-                                        .map(([k, v]) => k === 'gift' ? 'Gift' : `${v}`)
-                                        .join(', ')})`}
-                                    </Text>
-                                  )}
-                                  {' '}x {item.quantity}
-                                </Text>
-                                <View style={styles.productInfoRow}>
-                                  {item.is_picked_up && (
-                                    <Icon name="check-circle" size={14} color={Colors.success} style={{ marginRight: 4 }} />
-                                  )}
-                                  <View style={{ alignItems: 'flex-end', flexDirection: 'row', gap: 6 }}>
-                                    {discounted < original ? (
-                                      <>
-                                        <Text style={styles.productPrice}>₹{Number(discounted).toFixed(2)}</Text>
-                                        <Text style={[styles.productPrice, { textDecorationLine: 'line-through', color: Colors.textSecondary, fontSize: 11 }]}>₹{Number(original).toFixed(2)}</Text>
-                                      </>
-                                    ) : (
-                                      <Text style={styles.productPrice}>₹{Number(original).toFixed(2)}</Text>
-                                    )}
-                                  </View>
-                                </View>
-                              </View>
-                            </View>
-                          );
-                        })}
-                      </View>
-                    )}
-
-                    <TouchableOpacity 
-                      style={styles.viewProductDetailsBtn}
-                      onPress={() => navigation.navigate('ProductDetails', { 
-                        items: group.items, 
-                        storeName: group.name,
-                        appliedOffers: order.applied_offers
-                      })}
-                    >
-                      <Text style={styles.viewProductDetailsText}>View Product Images</Text>
-                    </TouchableOpacity>
-
-                    {/* Applied Offer Badges */}
-                    {(storeOffer || deliveryOffer) && (
-                      <View style={styles.offerBadgeContainer}>
-                        {storeOffer && (
-                          <View style={styles.offerBadge}>
-                            <Icon name="ticket-percent-outline" size={14} color="#16a34a" />
-                            <View style={{ flex: 1 }}>
-                              <Text style={styles.offerBadgeName}>{storeOffer.name || 'Store Offer'}</Text>
-                              <Text style={styles.offerBadgeDesc}>
-                                {(() => {
-                                  const { type, amount, reward_data } = storeOffer;
-                                  const productName = reward_data?.product_name;
-                                  switch (type) {
-                                    case 'discount': return `${amount}% Instant Discount on Total Items Price`;
-                                    case 'free_cash': return `₹${amount} Free Cash amount`;
-                                    case 'cheap_product': return `${amount}% Instant Discount on ${productName || 'Some Items'}`;
-                                    case 'combo': return `${productName || 'Items'} at Only ₹${amount}`;
-                                    case 'fixed_price': return `${productName || 'Selected Items'} at ₹${amount} each`;
-                                    case 'free_product': return `Get Free ${productName || 'Gift Item'}`;
-                                    default: return 'Special store offer';
-                                  }
-                                })()}
-                              </Text>
-                            </View>
-                          </View>
-                        )}
-                        {deliveryOffer && (
-                          <View style={[styles.offerBadge, { backgroundColor: '#fffbeb', borderColor: '#fde68a' }]}>
-                            <Icon name="truck-delivery-outline" size={14} color="#d97706" />
-                            <View style={{ flex: 1 }}>
-                              <Text style={[styles.offerBadgeName, { color: '#d97706' }]}>{deliveryOffer.name || 'Free Delivery'}</Text>
-                              <Text style={styles.offerBadgeDesc}>₹0 Delivery fee</Text>
-                            </View>
-                          </View>
-                        )}
-                      </View>
-                    )}
-                  </>
-                );
-              })()}
-
-              {/* Store-level Pickup Button */}
-              {order.rider_id && !isHistory && order.status !== 'delivered' && order.status !== 'cancelled' && (
-                (() => {
-                  const allStoreItemsPicked = group.items.length > 0 && group.items.every((item: any) => item.is_picked_up);
-                  if (allStoreItemsPicked) {
-                    return (
-                      <View style={styles.pickedUpBadge}>
-                        <Icon name="check-decagram" size={16} color={Colors.success} />
-                        <Text style={styles.pickedUpBadgeText}>PICKED UP FROM {group.name.toUpperCase()}</Text>
-                      </View>
-                    );
-                  }
-                  return (
-                    <TouchableOpacity 
-                      style={styles.storePickupBtn}
-                      onPress={() => handleStorePickUp(order.id, group.id || Object.keys(groups).find(key => groups[key] === group))}
-                    >
-                      <Text style={styles.storePickupBtnText}>Mark Picked Up</Text>
-                    </TouchableOpacity>
-                  );
-                })()
-              )}
-            </View>
-          ));
-        })()}
-
-          {isAvailable && (
-            <TouchableOpacity 
-              style={styles.acceptBtn}
-              onPress={() => handleAcceptOrder(order.id)}
-            >
-              <Text style={styles.acceptBtnText}>Accept Delivery</Text>
-            </TouchableOpacity>
-          )}
-
-
-        <View style={styles.divider} />
-
-        {/* Customer Details */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Icon name="account" size={18} color={Colors.success} />
-            <Text style={styles.sectionTitle}>Deliver to Customer</Text>
-          </View>
-          <Text style={styles.customerName}>
-            {order.customer?.full_name || (Array.isArray(order.customer) ? order.customer[0]?.full_name : 'Customer')}
-          </Text>
-          <Text style={styles.addressText}>{order.addresses?.address_line}, {order.addresses?.city}</Text>
-          <TouchableOpacity 
-            onPress={() => {
-              const phone = order.customer?.phone || (Array.isArray(order.customer) ? order.customer[0]?.phone : null);
-              if (phone) Linking.openURL(`tel:${phone}`);
-            }}
-            disabled={!(order.customer?.phone || (Array.isArray(order.customer) ? order.customer[0]?.phone : null))}
-          >
-            <Text style={styles.phoneText}>
-              <Icon name="phone" size={14} color={Colors.primary} /> { (order.customer?.phone || (Array.isArray(order.customer) ? order.customer[0]?.phone : null)) || 'Phone unavailable' }
-            </Text>
-          </TouchableOpacity>
-
-          {order.rider_id && order.status === 'picked_up' && (
-            <View style={styles.otpSection}>
-              {order.payment_method === 'pay_on_delivery' && (
-                <View style={styles.paymentAlert}>
-                  <Icon name="cash-multiple" size={24} color={Colors.warning} />
-                  <View style={styles.paymentAlertTextContainer}>
-                    <Text style={styles.paymentAlertTitle}>COLLECT FROM CUSTOMER</Text>
-                    <Text style={styles.paymentAlertAmount}>₹{Number(order.total_amount).toFixed(2)}</Text>
-                    <Text style={styles.paymentAlertNote}>(Final Total After All Offers)</Text>
-                  </View>
-                </View>
-              )}
-              
-              <Text style={styles.otpLabel}>Enter Delivery OTP</Text>
-              <View style={styles.otpRow}>
-                <TextInput
-                  style={styles.otpInput}
-                  placeholder="4-digit"
-                  keyboardType="number-pad"
-                  maxLength={4}
-                  value={otpInputs[order.id] || ''}
-                  onChangeText={(text) => setOtpInputs({ ...otpInputs, [order.id]: text })}
-                />
-                <TouchableOpacity 
-                  style={styles.completeBtn}
-                  onPress={() => handleCompleteOrder(order.id, order.delivery_otp)}
-                >
-                  <Text style={styles.completeBtnText}>Complete</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          )}
-
-          <View style={styles.divider} />
-          
-          <View style={styles.cardFooter}>
-              <View style={styles.totalContainer}>
-                 <View>
-                   <Text style={styles.totalLabel}>Total Price</Text>
-                   <TouchableOpacity 
-                     onPress={() => setBreakdownModal({ visible: true, order: { ...order, delivery_fee: getRiderDeliveryFee(order) } })}
-                   >
-                     <Text style={styles.viewSharesText}>View Shares</Text>
-                   </TouchableOpacity>
-                 </View>
-                 <View style={{ alignItems: 'flex-end' }}>
-                   <Text style={styles.grandTotal}>₹{Number(order.total_amount).toFixed(2)}</Text>
-                 </View>
-              </View>
-           </View>
-
-          {order.status === 'delivered' && order.payment_method === 'pay_on_delivery' && (
-            <TouchableOpacity
-              style={styles.showQrBtn}
-              onPress={() => handleShowPaymentQr(order)}
-              activeOpacity={0.85}
-            >
-              <Icon name="qrcode-scan" size={20} color={Colors.white} />
-              <Text style={styles.showQrBtnText}>Show QR</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      </View>
-    );
+  const handleShowBreakdown = (order: any) => {
+    setBreakdownModal({ 
+      visible: true, 
+      order: { ...order, delivery_fee: getRiderDeliveryFee(order) } 
+    });
   };
 
   useEffect(() => {
@@ -679,7 +668,19 @@ const DeliveriesScreen = ({ navigation }: any) => {
         <SectionList
           sections={sections}
           keyExtractor={(item) => item.id}
-          renderItem={({ item }) => renderOrder(item)}
+          renderItem={({ item }) => (
+            <OrderCard 
+              order={item}
+              navigation={navigation}
+              onAccept={handleAcceptOrder}
+              onStorePickUp={handleStorePickUp}
+              onShowBreakdown={handleShowBreakdown}
+              onComplete={handleCompleteOrder}
+              onShowQr={handleShowPaymentQr}
+              otpValue={otpInputs[item.id]}
+              setOtpValue={(text: string) => setOtpInputs(prev => ({ ...prev, [item.id]: text }))}
+            />
+          )}
           renderSectionHeader={renderSectionHeader}
           contentContainerStyle={styles.scrollContent}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}

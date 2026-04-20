@@ -13,6 +13,8 @@ import { BackButton } from '../components/ui/BackButton';
 
 const Stack = createNativeStackNavigator<AuthStackParamList>();
 
+const AuthHeaderLeft = () => <BackButton />;
+
 const AuthNavigator = () => {
   return (
     <Stack.Navigator
@@ -28,7 +30,7 @@ const AuthNavigator = () => {
           color: Colors.text,
         },
         headerTitleAlign: 'center',
-        headerLeft: () => <BackButton />,
+        headerLeft: AuthHeaderLeft,
       }}
     >
       <Stack.Screen 

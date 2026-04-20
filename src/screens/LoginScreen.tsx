@@ -82,7 +82,7 @@ const LoginScreen = ({ navigation }: Props) => {
         }
       }
 
-    } catch (err) {
+    } catch {
       showAlert('Login Error', 'An unexpected error occurred');
     }
     setLoading(false);
@@ -118,7 +118,7 @@ const LoginScreen = ({ navigation }: Props) => {
             <Text style={styles.label}>Password</Text>
             <View style={styles.passwordContainer}>
               <TextInput
-                style={[styles.input, { flex: 1, borderWidth: 0 }]}
+                style={styles.passwordInput}
                 placeholder="Enter your password"
                 placeholderTextColor="#999"
                 value={password}
@@ -212,6 +212,15 @@ const styles = StyleSheet.create({
     color: Colors.text,
     borderWidth: 1,
     borderColor: Colors.border,
+  },
+  passwordInput: {
+    height: UI.inputHeight,
+    backgroundColor: Colors.white,
+    paddingHorizontal: 16,
+    fontSize: 16,
+    color: Colors.text,
+    flex: 1,
+    borderWidth: 0,
   },
   passwordContainer: {
     flexDirection: 'row',

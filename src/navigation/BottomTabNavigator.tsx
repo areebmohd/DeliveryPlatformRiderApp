@@ -10,23 +10,25 @@ import { Colors, UI } from '../theme/colors';
 
 const Tab = createBottomTabNavigator();
 
+const TabBarIcon = ({ route, focused, color, size }: any) => {
+  let iconName: string = 'help-circle';
+
+  if (route.name === 'Dashboard') {
+    iconName = focused ? 'view-dashboard' : 'view-dashboard-outline';
+  } else if (route.name === 'Deliveries') {
+    iconName = focused ? 'moped' : 'moped-outline';
+  } else if (route.name === 'Account') {
+    iconName = focused ? 'account' : 'account-outline';
+  }
+
+  return <Icon name={iconName} size={size} color={color} />;
+};
+
 const BottomTabNavigator = () => {
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
-        tabBarIcon: ({ focused, color, size }) => {
-          let iconName: string = 'help-circle';
-
-          if (route.name === 'Dashboard') {
-            iconName = focused ? 'view-dashboard' : 'view-dashboard-outline';
-          } else if (route.name === 'Deliveries') {
-            iconName = focused ? 'moped' : 'moped-outline';
-          } else if (route.name === 'Account') {
-            iconName = focused ? 'account' : 'account-outline';
-          }
-
-          return <Icon name={iconName} size={size} color={color} />;
-        },
+        tabBarIcon: (props) => <TabBarIcon {...props} route={route} />,
         tabBarActiveTintColor: Colors.primary,
         tabBarInactiveTintColor: Colors.textSecondary,
         headerShown: true,

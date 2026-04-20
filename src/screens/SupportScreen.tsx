@@ -6,14 +6,12 @@ import {
   TouchableOpacity, 
   StatusBar, 
   Linking, 
-  Dimensions,
   ScrollView
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, Spacing, BorderRadius } from '../theme/colors';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
-const { width } = Dimensions.get('window');
 const SUPPORT_EMAIL = 'zorodeliveryapp@gmail.com';
 const SUPPORT_PHONE = '+91 7534846938';
 
@@ -70,7 +68,7 @@ const SupportScreen = ({ navigation }: any) => {
             <Icon name="arrow-left" size={24} color={Colors.white} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Rider Support</Text>
-          <View style={{ width: 44 }} />
+          <View style={styles.headerRightPlaceholder} />
         </View>
         <View style={styles.headerContent}>
           <Text style={styles.heroText}>Having trouble with a delivery?</Text>
@@ -165,6 +163,9 @@ const styles = StyleSheet.create({
     color: Colors.white,
     fontSize: 18,
     fontWeight: '800',
+  },
+  headerRightPlaceholder: {
+    width: 44,
   },
   headerContent: {
     paddingHorizontal: Spacing.lg,

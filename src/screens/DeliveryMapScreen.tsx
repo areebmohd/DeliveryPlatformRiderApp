@@ -5,7 +5,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
-  Dimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MapView, Camera, PointAnnotation, ShapeSource, LineLayer } from 'mappls-map-react-native';
@@ -13,11 +12,9 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { supabase } from '../lib/supabaseClient';
 import { Colors, Spacing, BorderRadius } from '../theme/colors';
 import Geolocation from 'react-native-geolocation-service';
-import { MAP_SDK_KEY, REST_API_KEY } from '@env';
 
-const { width } = Dimensions.get('window');
 
-const DeliveryMapScreen = ({ route, navigation }: any) => {
+const DeliveryMapScreen = ({ route }: any) => {
   const { orderId } = route.params;
   const insets = useSafeAreaInsets();
   const cameraRef = useRef<any>(null);
@@ -26,44 +23,6 @@ const DeliveryMapScreen = ({ route, navigation }: any) => {
   const [activeOrders, setActiveOrders] = useState<any[]>([]);
   const [riderLocation, setRiderLocation] = useState<any>(null);
   const [stores, setStores] = useState<any[]>([]);
-
-  useEffect(() => {
-    fetchActiveOrders();
-    getCurrentRiderLocation();
-
-    // Watch rider location
-    const watchId = Geolocation.watchPosition(
-      (position) => {
-        setRiderLocation({
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-        });
-      },
-      (error) => console.log('Watch Error:', error),
-      { enableHighAccuracy: true, distanceFilter: 10 }
-    );
-
-    // Real-time subscription for order updates (including pickup status)
-    const ordersSubscription = supabase
-      .channel('map_orders_updates')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => {
-        fetchActiveOrders();
-      })
-      .subscribe();
-
-    const itemsSubscription = supabase
-      .channel('map_items_updates')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'order_items' }, () => {
-        fetchActiveOrders();
-      })
-      .subscribe();
-
-    return () => {
-      Geolocation.clearWatch(watchId);
-      ordersSubscription.unsubscribe();
-      itemsSubscription.unsubscribe();
-    };
-  }, [orderId]);
 
   const [nextRouteLine, setNextRouteLine] = useState<any>(null);
   const [lastStopsHash, setLastStopsHash] = useState<string>('');
@@ -79,6 +38,135 @@ const DeliveryMapScreen = ({ route, navigation }: any) => {
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
     return R * c;
   };
+
+  const parseLocation = useCallback((locString: string) => {
+    if (!locString) return null;
+    
+    // If it's a WKT string (e.g. "POINT(77.123 28.123)")
+    const match = locString.match(/POINT\(([-\d.]+) ([-\d.]+)\)/);
+    if (match) {
+      return {
+        longitude: parseFloat(match[1]),
+        latitude: parseFloat(match[2]),
+      };
+    }
+
+    // If it's a hex EWKB string (common from Supabase directly)
+    // EWKB for Point SRID 4326 (Little Endian): 0101000020E6100000<8-byte-X><8-byte-Y>
+    if (locString.length >= 50 && locString.startsWith('0101000020E6100000')) {
+      try {
+        const hexToDouble = (hex: string) => {
+          const buffer = new Uint8Array(hex.match(/.{1,2}/g)!.map(byte => parseInt(byte, 16)));
+          const view = new DataView(buffer.buffer);
+          return view.getFloat64(0, true);
+        };
+        return {
+          longitude: hexToDouble(locString.substring(18, 34)),
+          latitude: hexToDouble(locString.substring(34, 50)),
+        };
+      } catch (e) {
+        console.error('Error parsing hex location:', e);
+      }
+    }
+    return null;
+  }, []);
+
+  const getCurrentRiderLocation = useCallback(() => {
+    Geolocation.getCurrentPosition(
+      (position) => {
+        setRiderLocation({
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+        });
+      },
+      (error) => console.log('Current Location Error:', error),
+      { enableHighAccuracy: true }
+    );
+  }, []);
+
+  const fetchActiveOrders = useCallback(async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data, error } = await supabase
+        .from('orders')
+        .select(`
+          *,
+          stores:store_id (id, name, location, address),
+          addresses:delivery_address_id (location, address_line, city),
+          customer:profiles!orders_customer_id_fkey (phone, full_name),
+          order_items (
+            product_id,
+            is_picked_up,
+            products (
+              stores (id, name, location, address)
+            )
+          )
+        `)
+        .or(`rider_id.eq.${user.id},id.eq.${orderId}`)
+        .in('status', ['waiting_for_pickup', 'picked_up']);
+
+      if (error) throw error;
+      
+      const orders = data || [];
+      setActiveOrders(orders);
+
+      // Extract unique stores (all stores from active orders)
+      const storeMap = new Map();
+      orders.forEach(order => {
+        // Direct store from store_id
+        if (order.stores) {
+          storeMap.set(order.stores.id, order.stores);
+        }
+        // Stores from items
+        order.order_items?.forEach((item: any) => {
+          const s = item.products?.stores;
+          if (s) {
+            storeMap.set(s.id, s);
+          }
+        });
+      });
+      setStores(Array.from(storeMap.values()));
+
+    } catch (error: any) {
+      console.error('Error fetching orders:', error.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [orderId]);
+
+  const fitToStops = useCallback((stops: any[]) => {
+    if (!cameraRef.current || !riderLocation) return;
+    
+    const allCoords = [
+      [riderLocation.longitude, riderLocation.latitude],
+      ...stops.map(s => [s.longitude, s.latitude])
+    ];
+
+    // Simple bounding box calculation
+    let minLng = allCoords[0][0], maxLng = allCoords[0][0];
+    let minLat = allCoords[0][1], maxLat = allCoords[0][1];
+
+    allCoords.forEach(([lng, lat]) => {
+      minLng = Math.min(minLng, lng);
+      maxLng = Math.max(maxLng, lng);
+      minLat = Math.min(minLat, lat);
+      maxLat = Math.max(maxLat, lat);
+    });
+
+    cameraRef.current.setCamera({
+      bounds: {
+        ne: [maxLng, maxLat],
+        sw: [minLng, minLat],
+        paddingLeft: 50,
+        paddingRight: 50,
+        paddingTop: 50,
+        paddingBottom: 200, // Account for info card
+      },
+      duration: 1000,
+    });
+  }, [riderLocation]);
 
   const calculateAndFetchRoute = useCallback(async () => {
     if (!riderLocation || activeOrders.length === 0) return;
@@ -148,144 +236,51 @@ const DeliveryMapScreen = ({ route, navigation }: any) => {
     } catch (error) {
       console.error('Error updating path:', error);
     }
-  }, [riderLocation, activeOrders, orderId, lastStopsHash, nextRouteLine]);
+  }, [riderLocation, activeOrders, orderId, lastStopsHash, nextRouteLine, fitToStops, parseLocation]);
 
   useEffect(() => {
-    if (activeOrders.length > 0 && riderLocation) {
-      calculateAndFetchRoute();
-    }
-  }, [activeOrders, riderLocation, calculateAndFetchRoute]);
+    fetchActiveOrders();
+    getCurrentRiderLocation();
 
-  const fetchActiveOrders = async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      const { data, error } = await supabase
-        .from('orders')
-        .select(`
-          *,
-          stores:store_id (id, name, location, address),
-          addresses:delivery_address_id (location, address_line, city),
-          customer:profiles!orders_customer_id_fkey (phone, full_name),
-          order_items (
-            product_id,
-            is_picked_up,
-            products (
-              stores (id, name, location, address)
-            )
-          )
-        `)
-        .or(`rider_id.eq.${user.id},id.eq.${orderId}`)
-        .in('status', ['waiting_for_pickup', 'picked_up']);
-
-      if (error) throw error;
-      
-      const orders = data || [];
-      setActiveOrders(orders);
-
-      // Extract unique stores (all stores from active orders)
-      const storeMap = new Map();
-      orders.forEach(order => {
-        // Direct store from store_id
-        if (order.stores) {
-          storeMap.set(order.stores.id, order.stores);
-        }
-        // Stores from items
-        order.order_items?.forEach((item: any) => {
-          const s = item.products?.stores;
-          if (s) {
-            storeMap.set(s.id, s);
-          }
-        });
-      });
-      setStores(Array.from(storeMap.values()));
-
-    } catch (error: any) {
-      console.error('Error fetching orders:', error.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-
-
-  const fitToStops = (stops: any[]) => {
-    if (!cameraRef.current || !riderLocation) return;
-    
-    const allCoords = [
-      [riderLocation.longitude, riderLocation.latitude],
-      ...stops.map(s => [s.longitude, s.latitude])
-    ];
-
-    // Simple bounding box calculation
-    let minLng = allCoords[0][0], maxLng = allCoords[0][0];
-    let minLat = allCoords[0][1], maxLat = allCoords[0][1];
-
-    allCoords.forEach(([lng, lat]) => {
-      minLng = Math.min(minLng, lng);
-      maxLng = Math.max(maxLng, lng);
-      minLat = Math.min(minLat, lat);
-      maxLat = Math.max(maxLat, lat);
-    });
-
-    cameraRef.current.setCamera({
-      bounds: {
-        ne: [maxLng, maxLat],
-        sw: [minLng, minLat],
-        paddingLeft: 50,
-        paddingRight: 50,
-        paddingTop: 50,
-        paddingBottom: 200, // Account for info card
-      },
-      duration: 1000,
-    });
-  };
-
-  const getCurrentRiderLocation = () => {
-    Geolocation.getCurrentPosition(
+    // Watch rider location
+    const watchId = Geolocation.watchPosition(
       (position) => {
         setRiderLocation({
           latitude: position.coords.latitude,
           longitude: position.coords.longitude,
         });
       },
-      (error) => console.log('Current Location Error:', error),
-      { enableHighAccuracy: true }
+      (error) => console.log('Watch Error:', error),
+      { enableHighAccuracy: true, distanceFilter: 10 }
     );
-  };
 
-  const parseLocation = (locString: string) => {
-    if (!locString) return null;
-    
-    // If it's a WKT string (e.g. "POINT(77.123 28.123)")
-    const match = locString.match(/POINT\(([-\d.]+) ([-\d.]+)\)/);
-    if (match) {
-      return {
-        longitude: parseFloat(match[1]),
-        latitude: parseFloat(match[2]),
-      };
-    }
+    // Real-time subscription for order updates (including pickup status)
+    const ordersSubscription = supabase
+      .channel('map_orders_updates')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => {
+        fetchActiveOrders();
+      })
+      .subscribe();
 
-    // If it's a hex EWKB string (common from Supabase directly)
-    // EWKB for Point SRID 4326 (Little Endian): 0101000020E6100000<8-byte-X><8-byte-Y>
-    if (locString.length >= 50 && locString.startsWith('0101000020E6100000')) {
-      try {
-        const hexToDouble = (hex: string) => {
-          const buffer = new Uint8Array(hex.match(/.{1,2}/g)!.map(byte => parseInt(byte, 16)));
-          const view = new DataView(buffer.buffer);
-          return view.getFloat64(0, true);
-        };
-        return {
-          longitude: hexToDouble(locString.substring(18, 34)),
-          latitude: hexToDouble(locString.substring(34, 50)),
-        };
-      } catch (e) {
-        console.error('Error parsing hex location:', e);
-      }
+    const itemsSubscription = supabase
+      .channel('map_items_updates')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'order_items' }, () => {
+        fetchActiveOrders();
+      })
+      .subscribe();
+
+    return () => {
+      Geolocation.clearWatch(watchId);
+      ordersSubscription.unsubscribe();
+      itemsSubscription.unsubscribe();
+    };
+  }, [orderId, fetchActiveOrders, getCurrentRiderLocation]);
+
+  useEffect(() => {
+    if (activeOrders.length > 0 && riderLocation) {
+      calculateAndFetchRoute();
     }
-    return null;
-  };
+  }, [activeOrders, riderLocation, calculateAndFetchRoute]);
 
   if (loading) {
     return (

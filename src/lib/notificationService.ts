@@ -27,14 +27,8 @@ class NotificationService {
   }
 
   async requestUserPermission() {
-    const authStatus = await messaging().requestPermission();
-    const enabled =
-      authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
-      authStatus === messaging.AuthorizationStatus.PROVISIONAL;
+    await messaging().requestPermission();
 
-    if (enabled) {
-      console.log('Authorization status:', authStatus);
-    }
 
     // Also request Notifee permission (Android 13+)
     await notifee.requestPermission();

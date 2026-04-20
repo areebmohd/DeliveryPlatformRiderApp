@@ -36,7 +36,7 @@ const VerifyEmailOTPScreen = ({ navigation, route }: Props) => {
       const normalizedEmail = email.toLowerCase().trim();
       
       // Try with 'signup' type first as it's the most common for new accounts
-      const { data, error } = await supabase.auth.verifyOtp({
+      const { error } = await supabase.auth.verifyOtp({
         email: normalizedEmail,
         token: otp,
         type: 'signup',
@@ -44,8 +44,7 @@ const VerifyEmailOTPScreen = ({ navigation, route }: Props) => {
 
       if (error) {
         // Fallback to 'email' type if 'signup' fails (sometimes used for existing users)
-        console.log('Verification with type signup failed, trying email:', error.message);
-        const { data: retryData, error: retryError } = await supabase.auth.verifyOtp({
+        const { error: retryError } = await supabase.auth.verifyOtp({
           email: normalizedEmail,
           token: otp,
           type: 'email',

@@ -12,7 +12,6 @@ export const NotificationProvider = ({ children, userId }: { children: React.Rea
 
     // 2. Handle foreground messages
     const unsubscribe = messaging().onMessage(async remoteMessage => {
-      console.log('Foreground message received:', remoteMessage);
       if (remoteMessage.notification) {
         await notificationService.displayLocalNotification(
           remoteMessage.notification.title || 'New Notification',
@@ -35,7 +34,6 @@ export const NotificationProvider = ({ children, userId }: { children: React.Rea
           filter: userId ? `user_id=eq.${userId}` : undefined,
         },
         async (payload) => {
-          console.log('New database notification:', payload);
           // Only show local banner if the message didn't come through FCM
           // or as a fallback for the unassigned "rider" group.
           if (!payload.new.fcm_sent) {

@@ -3,7 +3,6 @@ import {
   View, 
   Text, 
   StyleSheet, 
-  TouchableOpacity, 
   StatusBar, 
   ActivityIndicator, 
   ScrollView, 
@@ -14,7 +13,7 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { supabase } from '../lib/supabaseClient';
 import { useCustomAlert } from '../context/CustomAlertContext';
 
-const PaymentsScreen = ({ navigation }: any) => {
+const PaymentsScreen = ({ }: any) => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [payouts, setPayouts] = useState<any[]>([]);
@@ -36,13 +35,13 @@ const PaymentsScreen = ({ navigation }: any) => {
 
       if (payoutsError) throw payoutsError;
 
-      const { data: stats, error: statsError } = await supabase.rpc('get_rider_dashboard_stats', {
+      const { data: stats } = await supabase.rpc('get_rider_dashboard_stats', {
         p_rider_id: user.id,
         days_limit: 1
       });
 
       // Fetch lifetime earnings
-      const { data: lifetimeStats, error: lifetimeError } = await supabase.rpc('get_rider_dashboard_stats', {
+      const { data: lifetimeStats } = await supabase.rpc('get_rider_dashboard_stats', {
         p_rider_id: user.id,
         days_limit: 3650 // ~10 years
       });
@@ -81,9 +80,11 @@ const PaymentsScreen = ({ navigation }: any) => {
     }
   };
 
+  const fetchRiderPayoutsCallback = React.useCallback(fetchRiderPayouts, [showAlert]);
+
   useEffect(() => {
-    fetchRiderPayouts();
-  }, []);
+    fetchRiderPayoutsCallback();
+  }, [fetchRiderPayoutsCallback]);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -210,7 +211,7 @@ const PaymentsScreen = ({ navigation }: any) => {
               </Text>
             </View>
           )}
-          <View style={{ height: 120 }} />
+          <View style={styles.footerSpacing} />
         </ScrollView>
       )}
     </View>
@@ -276,6 +277,9 @@ const styles = StyleSheet.create({
   emptyIconCircle: { width: 100, height: 100, borderRadius: 50, backgroundColor: Colors.border + '15', justifyContent: 'center', alignItems: 'center', marginBottom: 20 },
   emptyStateTitle: { fontSize: 20, fontWeight: '800', color: Colors.text },
   emptyStateSubtitle: { fontSize: 14, color: Colors.textSecondary, textAlign: 'center', marginTop: 8, lineHeight: 20 },
+  footerSpacing: {
+    height: 120,
+  },
 });
 
 export default PaymentsScreen;

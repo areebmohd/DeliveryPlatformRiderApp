@@ -5,16 +5,14 @@ import {
   StyleSheet,
   ScrollView,
   Image,
-  TouchableOpacity,
   StatusBar,
   Platform,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { Colors, Spacing, BorderRadius, Typography } from '../theme/colors';
-import { getItemTotals } from '../utils/orderUtils';
 
-const ProductDetailsScreen = ({ route, navigation }: any) => {
-  const { items, storeName, appliedOffers } = route.params;
+const ProductDetailsScreen = ({ route }: any) => {
+  const { items, storeName } = route.params;
 
   const renderProduct = (item: any) => {
     // More robust data resolution

@@ -55,6 +55,36 @@ const RIDER_PRO_TIPS = [
   },
 ];
 
+const StatCard = React.memo(({ title, value, icon, color, subtitle, suffix = "" }: any) => (
+  <View style={styles.statCard}>
+    <View style={[styles.iconContainer, { backgroundColor: color + '15' }]}>
+      <Icon name={icon} size={24} color={color} />
+    </View>
+    <View style={styles.statInfo}>
+      <Text style={styles.statLabel} numberOfLines={1}>{title}</Text>
+      <Text style={[styles.statValue, { color: Colors.text }]}>{value}{suffix}</Text>
+      {subtitle && <Text style={styles.statSubtitle}>{subtitle}</Text>}
+    </View>
+  </View>
+));
+
+const TimeframeButton = React.memo(({ label, value, current, onSelect }: { label: string; value: Timeframe; current: Timeframe; onSelect: (v: Timeframe) => void }) => (
+  <TouchableOpacity
+    style={[
+      styles.timeframeBtn,
+      current === value && styles.timeframeBtnActive,
+    ]}
+    onPress={() => onSelect(value)}>
+    <Text
+      style={[
+        styles.timeframeText,
+        current === value && styles.timeframeTextActive,
+      ]}>
+      {label}
+    </Text>
+  </TouchableOpacity>
+));
+
 const DashboardScreen = () => {
   const { showAlert } = useCustomAlert();
   const [loading, setLoading] = useState(true);
@@ -94,42 +124,14 @@ const DashboardScreen = () => {
     fetchDashboardData(timeframe);
   };
 
+  const handleTimeframeSelect = useCallback((value: Timeframe) => {
+    setLoading(true);
+    setTimeframe(value);
+  }, []);
+
   const formatCurrency = (amount: number) => {
     return `₹${Number(amount).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 1 })}`;
   };
-
-  const StatCard = ({ title, value, icon, color, subtitle, suffix = "" }: any) => (
-    <View style={styles.statCard}>
-      <View style={[styles.iconContainer, { backgroundColor: color + '15' }]}>
-        <Icon name={icon} size={24} color={color} />
-      </View>
-      <View style={styles.statInfo}>
-        <Text style={styles.statLabel} numberOfLines={1}>{title}</Text>
-        <Text style={[styles.statValue, { color: Colors.text }]}>{value}{suffix}</Text>
-        {subtitle && <Text style={styles.statSubtitle}>{subtitle}</Text>}
-      </View>
-    </View>
-  );
-
-  const TimeframeButton = ({ label, value }: { label: string; value: Timeframe }) => (
-    <TouchableOpacity
-      style={[
-        styles.timeframeBtn,
-        timeframe === value && styles.timeframeBtnActive,
-      ]}
-      onPress={() => {
-        setLoading(true);
-        setTimeframe(value);
-      }}>
-      <Text
-        style={[
-          styles.timeframeText,
-          timeframe === value && styles.timeframeTextActive,
-        ]}>
-        {label}
-      </Text>
-    </TouchableOpacity>
-  );
 
   if (loading && !refreshing) {
     return (
@@ -146,9 +148,9 @@ const DashboardScreen = () => {
         <Text style={styles.dashboardSubtitle}>Track your earnings and progress</Text>
         
         <View style={styles.timeframeContainer}>
-          <TimeframeButton label="Daily" value="daily" />
-          <TimeframeButton label="Weekly" value="weekly" />
-          <TimeframeButton label="Monthly" value="monthly" />
+          <TimeframeButton label="Daily" value="daily" current={timeframe} onSelect={handleTimeframeSelect} />
+          <TimeframeButton label="Weekly" value="weekly" current={timeframe} onSelect={handleTimeframeSelect} />
+          <TimeframeButton label="Monthly" value="monthly" current={timeframe} onSelect={handleTimeframeSelect} />
         </View>
       </View>
 

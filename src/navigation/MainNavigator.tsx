@@ -16,6 +16,8 @@ import { useEffect } from 'react';
 
 const Stack = createNativeStackNavigator<AuthStackParamList>();
 
+const MainHeaderLeft = () => <BackButton />;
+
 const MainNavigator = ({ userId }: { userId?: string }) => {
   // Start location tracking when rider is in the main navigator
   useRiderLocation(userId);
@@ -42,7 +44,7 @@ const MainNavigator = ({ userId }: { userId?: string }) => {
           color: Colors.text,
         },
         headerTitleAlign: 'center',
-        headerLeft: () => <BackButton />,
+        headerLeft: MainHeaderLeft,
       }}
     >
       <Stack.Screen 

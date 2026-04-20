@@ -6,14 +6,13 @@ import {
   StatusBar,
   ActivityIndicator,
   SectionList,
-  TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { supabase } from '../lib/supabaseClient';
 import { Colors, BorderRadius } from '../theme/colors';
 
-const NotificationsScreen = ({ navigation }: any) => {
+const NotificationsScreen = ({ }: any) => {
   const [sections, setSections] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 

@@ -213,7 +213,7 @@ const ProfileSetupScreen = ({ navigation, route }: Props) => {
     <SafeAreaView style={styles.safeArea} edges={isEditing ? ['bottom'] : ['top', 'bottom']}>
       <StatusBar backgroundColor="#f8f9fa" barStyle="dark-content" />
       <KeyboardAvoidingView
-        style={{ flex: 1 }}
+        style={styles.keyboardView}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
       >
@@ -257,7 +257,7 @@ const ProfileSetupScreen = ({ navigation, route }: Props) => {
             autoCapitalize="none"
           />
 
-          <Text style={[styles.sectionTitle, { marginTop: 20 }]}>
+          <Text style={styles.addressSectionTitle}>
             Address Details
           </Text>
           <TextInput
@@ -276,7 +276,7 @@ const ProfileSetupScreen = ({ navigation, route }: Props) => {
           />
           <View style={styles.row}>
             <TextInput
-              style={[styles.input, { flex: 1, marginRight: 10 }]}
+              style={styles.pincodeInput}
               placeholder="Pincode"
               placeholderTextColor="#999"
               value={pincode}
@@ -284,7 +284,7 @@ const ProfileSetupScreen = ({ navigation, route }: Props) => {
               keyboardType="number-pad"
             />
             <TextInput
-              style={[styles.input, { flex: 1 }]}
+              style={styles.cityInput}
               placeholder="City"
               placeholderTextColor="#999"
               value={city}
@@ -299,7 +299,7 @@ const ProfileSetupScreen = ({ navigation, route }: Props) => {
             onChangeText={setState}
           />
 
-          <Text style={[styles.sectionTitle, { marginTop: 20 }]}>
+          <Text style={styles.vehicleSectionTitle}>
             Vehicle Details
           </Text>
           
@@ -407,6 +407,48 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
     marginBottom: 14,
+  },
+  keyboardView: {
+    flex: 1,
+  },
+  addressSectionTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.primary,
+    marginBottom: 14,
+    marginTop: 20,
+  },
+  pincodeInput: {
+    height: UI.inputHeight,
+    backgroundColor: Colors.white,
+    borderRadius: BorderRadius.input,
+    paddingHorizontal: 16,
+    fontSize: 15,
+    color: Colors.text,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    marginBottom: 14,
+    flex: 1,
+    marginRight: 10,
+  },
+  cityInput: {
+    height: UI.inputHeight,
+    backgroundColor: Colors.white,
+    borderRadius: BorderRadius.input,
+    paddingHorizontal: 16,
+    fontSize: 15,
+    color: Colors.text,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    marginBottom: 14,
+    flex: 1,
+  },
+  vehicleSectionTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.primary,
+    marginBottom: 14,
+    marginTop: 20,
   },
   row: { flexDirection: 'row', marginBottom: 0 },
   button: {
