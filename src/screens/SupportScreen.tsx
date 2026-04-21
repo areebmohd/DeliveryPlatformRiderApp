@@ -6,7 +6,8 @@ import {
   TouchableOpacity, 
   StatusBar, 
   Linking, 
-  ScrollView
+  ScrollView,
+  RefreshControl
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors, Spacing, BorderRadius } from '../theme/colors';
@@ -48,6 +49,16 @@ const SupportActionCard = ({
 
 const SupportScreen = ({ navigation }: any) => {
   const insets = useSafeAreaInsets();
+  const [refreshing, setRefreshing] = React.useState(false);
+
+  const onRefresh = React.useCallback(() => {
+    setRefreshing(true);
+    // Support info is currently static, but we provide the refresh mechanics for consistency
+    setTimeout(() => {
+      setRefreshing(false);
+    }, 1000);
+  }, []);
+
 
   const handleEmailSupport = () => {
     Linking.openURL(`mailto:${SUPPORT_EMAIL}?subject=Rider%20Support%20Request`);
@@ -80,6 +91,9 @@ const SupportScreen = ({ navigation }: any) => {
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />
+        }
       >
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>CONTACT US</Text>

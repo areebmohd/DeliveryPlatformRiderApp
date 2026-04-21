@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   ScrollView,
   StatusBar,
+  RefreshControl,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { supabase } from '../lib/supabaseClient';
@@ -28,6 +29,7 @@ const AccountOption = ({ icon, label, onPress }: { icon: string; label: string; 
 const AccountScreen = ({ navigation }: { navigation: any }) => {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<any>(null);
+  const [refreshing, setRefreshing] = useState(false);
   const { showAlert } = useCustomAlert();
 
   useEffect(() => {
@@ -35,19 +37,31 @@ const AccountScreen = ({ navigation }: { navigation: any }) => {
   }, []);
 
   async function fetchData() {
-    const { data: { user } } = await supabase.auth.getUser();
-    setUser(user);
-
-    if (user) {
-      const { data: profileData, error } = await supabase
-        .from('profiles')
-        .select('*, rider_profiles(*)')
-        .eq('id', user.id)
-        .single();
-      if (error) throw error;
-      setProfile(profileData);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      setUser(user);
+  
+      if (user) {
+        const { data: profileData, error } = await supabase
+          .from('profiles')
+          .select('*, rider_profiles(*)')
+          .eq('id', user.id)
+          .single();
+        if (error) throw error;
+        setProfile(profileData);
+      }
+    } catch (e: any) {
+      console.error('Error fetching account data:', e);
+    } finally {
+      setRefreshing(false);
     }
   }
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchData();
+  };
+
 
   const handleLogout = async () => {
     showAlert(
@@ -72,6 +86,9 @@ const AccountScreen = ({ navigation }: { navigation: any }) => {
       style={styles.container}
       contentContainerStyle={{ paddingBottom: 40 }}
       showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />
+      }
     >
       <StatusBar backgroundColor={Colors.background} barStyle="dark-content" />
 

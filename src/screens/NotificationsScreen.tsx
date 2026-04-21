@@ -6,6 +6,7 @@ import {
   StatusBar,
   ActivityIndicator,
   SectionList,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -15,6 +16,7 @@ import { Colors, BorderRadius } from '../theme/colors';
 const NotificationsScreen = ({ }: any) => {
   const [sections, setSections] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     fetchNotifications();
@@ -22,7 +24,7 @@ const NotificationsScreen = ({ }: any) => {
 
   const fetchNotifications = async () => {
     try {
-      setLoading(true);
+      if (!refreshing) setLoading(true);
       const { data, error } = await supabase
         .from('notifications')
         .select('*')
@@ -30,6 +32,7 @@ const NotificationsScreen = ({ }: any) => {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
+
 
       // Group by date
       const grouped: { [key: string]: any[] } = {};
@@ -58,8 +61,15 @@ const NotificationsScreen = ({ }: any) => {
       console.error('Error fetching notifications:', e);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchNotifications();
+  };
+
 
   const renderItem = ({ item }: { item: any }) => (
     <View style={styles.notificationCard}>
@@ -100,6 +110,9 @@ const NotificationsScreen = ({ }: any) => {
           contentContainerStyle={styles.listContent}
           stickySectionHeadersEnabled={false}
           showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />
+          }
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
               <Icon name="bell-off-outline" size={80} color={Colors.border} />

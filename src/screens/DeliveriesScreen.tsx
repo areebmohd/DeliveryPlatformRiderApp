@@ -377,6 +377,7 @@ const DeliveriesScreen = ({ navigation }: any) => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [orders, setOrders] = useState<any[]>([]);
+  const [isVerified, setIsVerified] = useState<boolean | null>(null);
   const [otpInputs, setOtpInputs] = useState<{ [key: string]: string }>({});
   const { showAlert } = useCustomAlert();
   const { checkProfileCompleteness } = useProfileCheck();
@@ -426,9 +427,19 @@ const DeliveriesScreen = ({ navigation }: any) => {
       
       const { data: riderProfile } = await supabase
         .from('rider_profiles')
-        .select('vehicle_type')
+        .select('vehicle_type, is_verified')
         .eq('profile_id', user.id)
         .maybeSingle();
+      
+      const verificationStatus = riderProfile?.is_verified ?? false;
+      setIsVerified(verificationStatus);
+
+      if (!verificationStatus) {
+        setOrders([]);
+        setLoading(false);
+        setRefreshing(false);
+        return;
+      }
       
       const vehicleType = (riderProfile?.vehicle_type || 'bike').toLowerCase();
       
@@ -544,7 +555,7 @@ const DeliveriesScreen = ({ navigation }: any) => {
     fetchOrders();
     
     // Subscribe to order changes
-    const subscription = supabase
+    const orderSubscription = supabase
       .channel('rider_orders_all')
       .on('postgres_changes', { 
         event: '*', 
@@ -555,8 +566,34 @@ const DeliveriesScreen = ({ navigation }: any) => {
       })
       .subscribe();
 
+    // Subscribe to verification status changes
+    let profileSubscription: any;
+    const setupProfileSubscription = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      profileSubscription = supabase
+        .channel(`rider_profile_${user.id}`)
+        .on('postgres_changes', {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'rider_profiles',
+          filter: `profile_id=eq.${user.id}`
+        }, (payload) => {
+          console.log('Verification status changed:', payload.new.is_verified);
+          setIsVerified(payload.new.is_verified);
+          if (payload.new.is_verified) {
+            fetchOrders();
+          }
+        })
+        .subscribe();
+    };
+
+    setupProfileSubscription();
+
     return () => {
-      subscription.unsubscribe();
+      if (orderSubscription) orderSubscription.unsubscribe();
+      if (profileSubscription) profileSubscription.unsubscribe();
     };
   }, [fetchOrders]);
 
@@ -660,12 +697,40 @@ const DeliveriesScreen = ({ navigation }: any) => {
         <View style={styles.center}>
           <ActivityIndicator size="large" color={Colors.primary} />
         </View>
+      ) : isVerified === false ? (
+        <ScrollView
+          contentContainerStyle={styles.scrollFlexible}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.verificationContainer}>
+            <View style={styles.verificationCard}>
+              <View style={styles.iconCircle}>
+                <Icon name="shield-account" size={50} color={Colors.primary} />
+              </View>
+              <Text style={styles.verificationTitle}>Verification Pending</Text>
+              <Text style={styles.verificationText}>
+                Your profile will be verified by admin then you will be able to accept deliveries
+              </Text>
+              <View style={styles.statusBadgePending}>
+                <Icon name="clock-outline" size={16} color={Colors.warning} />
+                <Text style={styles.statusBadgeText}>Awaiting Review</Text>
+              </View>
+            </View>
+          </View>
+        </ScrollView>
       ) : orders.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <Icon name="moped" size={80} color={Colors.border} />
-          <Text style={styles.emptyText}>No deliveries found</Text>
-          <Text style={styles.emptySubtext}>New orders will show up here as they become available.</Text>
-        </View>
+        <ScrollView
+          contentContainerStyle={styles.scrollFlexible}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.emptyContainer}>
+            <Icon name="moped" size={80} color={Colors.border} />
+            <Text style={styles.emptyText}>No deliveries found</Text>
+            <Text style={styles.emptySubtext}>New orders will show up here as they become available.</Text>
+          </View>
+        </ScrollView>
       ) : (
         <SectionList
           sections={sections}
@@ -1512,6 +1577,69 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     fontWeight: '600',
     marginBottom: Spacing.sm,
+  },
+  verificationContainer: {
+    flex: 1,
+    backgroundColor: '#f8fafc',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  verificationCard: {
+    backgroundColor: Colors.white,
+    borderRadius: 24,
+    padding: 32,
+    alignItems: 'center',
+    width: '100%',
+    maxWidth: 400,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.1,
+    shadowRadius: 20,
+    elevation: 8,
+  },
+  iconCircle: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: '#eff6ff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  verificationTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#1e293b',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  verificationText: {
+    fontSize: 16,
+    color: '#64748b',
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: 24,
+  },
+  statusBadgePending: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fffbeb',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#fef3c7',
+  },
+  statusBadgeText: {
+    color: '#d97706',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  scrollFlexible: {
+    flexGrow: 1,
+    justifyContent: 'center',
   },
 });
 
