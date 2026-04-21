@@ -18,6 +18,8 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useCustomAlert } from '../context/CustomAlertContext';
 import { useProfileCheck } from '../hooks/useProfileCheck';
 import QRCode from 'react-native-qrcode-svg';
+import { getItemTotals } from '../utils/orderUtils';
+
 
 const PAYMENT_UPI_ID = 'Q369351522@ybl';
 const PAYMENT_PAYEE_NAME = 'Delivery Platform';
