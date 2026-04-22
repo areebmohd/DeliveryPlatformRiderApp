@@ -23,6 +23,7 @@ const DeliveryMapScreen = ({ route }: any) => {
   const [activeOrders, setActiveOrders] = useState<any[]>([]);
   const [riderLocation, setRiderLocation] = useState<any>(null);
   const [stores, setStores] = useState<any[]>([]);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   const [nextRouteLine, setNextRouteLine] = useState<any>(null);
   const [lastStopsHash, setLastStopsHash] = useState<string>('');
@@ -88,6 +89,7 @@ const DeliveryMapScreen = ({ route }: any) => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
+      setCurrentUserId(user.id);
 
       const { data, error } = await supabase
         .from('orders')
@@ -177,37 +179,45 @@ const DeliveryMapScreen = ({ route }: any) => {
     const customerLoc = parseLocation(selectedOrder.addresses?.location);
 
     let rawStops: any[] = [];
+    let stops: any[] = [];
+
     if (selectedOrder.status === 'picked_up') {
-      if (customerLoc) rawStops = [customerLoc];
+      if (customerLoc) stops = [customerLoc];
     } else {
       const orderStores = new Map();
       if (selectedOrder.stores) orderStores.set(selectedOrder.stores.id, selectedOrder.stores);
+      
       selectedOrder.order_items?.forEach((item: any) => {
         const s = item.products?.stores;
         if (s) {
-          const storeItems = selectedOrder.order_items.filter((oi: any) => (oi.products?.stores?.id || selectedOrder.stores?.id) === s.id);
+          const storeItems = selectedOrder.order_items.filter((oi: any) => 
+            (oi.products?.stores?.id || selectedOrder.stores?.id) === s.id
+          );
           const allPicked = storeItems.every((oi: any) => oi.is_picked_up);
           if (!allPicked) orderStores.set(s.id, s);
         }
       });
-      rawStops = Array.from(orderStores.values())
+
+      // Sort stores by proximity to rider
+      const storeStops = Array.from(orderStores.values())
         .map(s => parseLocation(s.location))
-        .filter(l => !!l);
-      if (customerLoc) rawStops.push(customerLoc);
+        .filter(l => !!l)
+        .sort((a, b) => {
+          const distA = calculateDistance(riderLocation.latitude, riderLocation.longitude, a.latitude, a.longitude);
+          const distB = calculateDistance(riderLocation.latitude, riderLocation.longitude, b.latitude, b.longitude);
+          return distA - distB;
+        });
+      
+      stops = [...storeStops];
+      // Customer is ALWAYS the final stop
+      if (customerLoc) stops.push(customerLoc);
     }
 
-    if (rawStops.length === 0) {
+    if (stops.length === 0) {
       setNextRouteLine(null);
       setLastStopsHash('');
       return;
     }
-
-    // SHORTEST PATH: Sort rawStops by proximity to current rider location
-    const stops = [...rawStops].sort((a, b) => {
-      const distA = calculateDistance(riderLocation.latitude, riderLocation.longitude, a.latitude, a.longitude);
-      const distB = calculateDistance(riderLocation.latitude, riderLocation.longitude, b.latitude, b.longitude);
-      return distA - distB;
-    });
 
     // MEMORY/SPEED FIX: If the next stop hasn't changed, don't spam the routing API
     const currentStopsHash = stops.map(s => `${s.longitude},${s.latitude}`).join('|');
@@ -216,6 +226,13 @@ const DeliveryMapScreen = ({ route }: any) => {
     }
 
     try {
+      // THE FIX: Only show route line if the order is accepted by this rider
+      if (selectedOrder.rider_id !== currentUserId) {
+        setNextRouteLine(null);
+        setLastStopsHash('');
+        return;
+      }
+
       // DIRECT PATH: Instead of API road routing (which misses small galis), 
       // we draw a straight direct line to the next stop.
       const directPath = {

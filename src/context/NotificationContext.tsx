@@ -31,7 +31,7 @@ export const NotificationProvider = ({ children, userId }: { children: React.Rea
           event: 'INSERT',
           schema: 'public',
           table: 'notifications',
-          filter: userId ? `user_id=eq.${userId}` : undefined,
+          filter: undefined,
         },
         async (payload) => {
           // Only show local banner if the message didn't come through FCM

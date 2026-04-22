@@ -17,18 +17,32 @@ const NotificationsScreen = ({ }: any) => {
   const [sections, setSections] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchNotifications();
+    initialize();
   }, []);
 
-  const fetchNotifications = async () => {
+  const initialize = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      setUserId(user.id);
+      fetchNotifications(user.id);
+    } else {
+      setLoading(false);
+    }
+  };
+
+  const fetchNotifications = async (currentUserId?: string) => {
     try {
+      const uid = currentUserId || userId;
+      if (!uid) return;
+
       if (!refreshing) setLoading(true);
       const { data, error } = await supabase
         .from('notifications')
         .select('*')
-        .eq('target_group', 'rider')
+        .or(`user_id.eq.${uid},target_group.eq.rider`)
         .order('created_at', { ascending: false });
 
       if (error) throw error;

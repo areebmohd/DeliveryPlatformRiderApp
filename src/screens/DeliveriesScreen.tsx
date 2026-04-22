@@ -15,6 +15,7 @@ import {
 import { supabase } from '../lib/supabaseClient';
 import { Colors, Spacing, BorderRadius } from '../theme/colors';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import Geolocation from 'react-native-geolocation-service';
 import { useCustomAlert } from '../context/CustomAlertContext';
 import { useProfileCheck } from '../hooks/useProfileCheck';
 import QRCode from 'react-native-qrcode-svg';
@@ -44,6 +45,46 @@ const buildUpiPaymentUri = (upiId: string, payeeName: string, order: any) => {
   });
 
   return `upi://pay?${params.toString()}`;
+};
+
+const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+  const R = 6371; // km
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = 
+    Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+    Math.sin(dLon/2) * Math.sin(dLon/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * c;
+};
+
+const parseLocation = (locString: string) => {
+  if (!locString) return null;
+  const match = locString.match(/POINT\(([-\d.]+) ([-\d.]+)\)/);
+  if (match) {
+    return {
+      longitude: parseFloat(match[1]),
+      latitude: parseFloat(match[2]),
+    };
+  }
+  // Hex EWKB handling
+  if (locString.length >= 50 && locString.startsWith('0101000020E6100000')) {
+    try {
+      const hexToDouble = (hex: string) => {
+        const buffer = new Uint8Array(hex.match(/.{1,2}/g)!.map(byte => parseInt(byte, 16)));
+        const view = new DataView(buffer.buffer);
+        return view.getFloat64(0, true);
+      };
+      return {
+        longitude: hexToDouble(locString.substring(18, 34)),
+        latitude: hexToDouble(locString.substring(34, 50)),
+      };
+    } catch (e) {
+      return null;
+    }
+  }
+  return null;
 };
 
 // --- Sub-components for better performance ---
@@ -191,7 +232,8 @@ const OrderCard = React.memo(({
   onComplete, 
   onShowQr,
   otpValue,
-  setOtpValue
+  setOtpValue,
+  riderLocation
 }: any) => {
   const isHistory = order.status === 'delivered' || order.status === 'cancelled';
   const isAvailable = order.rider_id === null;
@@ -223,6 +265,7 @@ const OrderCard = React.memo(({
           name: store?.name || 'Unknown Store',
           address: store?.address || 'N/A',
           phone: store?.phone,
+          location: store?.location,
           items: []
         };
       }
@@ -237,11 +280,28 @@ const OrderCard = React.memo(({
         name: s.name || 'Unknown Store',
         address: s.address || 'N/A',
         phone: s.phone,
+        location: s.location, // Ensure location is here
         items: []
       };
     }
-    return Object.values(g);
-  }, [order.order_items, order.stores]);
+    
+    let result = Object.values(g);
+
+    // SORT BY PROXIMITY
+    if (riderLocation) {
+      result = result.sort((a: any, b: any) => {
+        const locA = parseLocation(a.location);
+        const locB = parseLocation(b.location);
+        if (!locA || !locB) return 0;
+
+        const distA = calculateDistance(riderLocation.latitude, riderLocation.longitude, locA.latitude, locA.longitude);
+        const distB = calculateDistance(riderLocation.latitude, riderLocation.longitude, locB.latitude, locB.longitude);
+        return distA - distB;
+      });
+    }
+
+    return result;
+  }, [order.order_items, order.stores, riderLocation]);
 
   return (
     <View style={[styles.orderCard, isHistory && styles.historyCard]}>
@@ -379,6 +439,7 @@ const DeliveriesScreen = ({ navigation }: any) => {
   const [orders, setOrders] = useState<any[]>([]);
   const [isVerified, setIsVerified] = useState<boolean | null>(null);
   const [otpInputs, setOtpInputs] = useState<{ [key: string]: string }>({});
+  const [riderLocation, setRiderLocation] = useState<{ latitude: number, longitude: number } | null>(null);
   const { showAlert } = useCustomAlert();
   const { checkProfileCompleteness } = useProfileCheck();
   const [breakdownModal, setBreakdownModal] = useState<{ visible: boolean; order: any }>({ 
@@ -390,6 +451,18 @@ const DeliveriesScreen = ({ navigation }: any) => {
     order: null,
     upiUri: '',
   });
+  const getCurrentLocation = useCallback(() => {
+    Geolocation.getCurrentPosition(
+      (position) => {
+        setRiderLocation({
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+        });
+      },
+      (error) => console.log('Location Error:', error),
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 }
+    );
+  }, []);
 
   const fetchOrders = useCallback(async () => {
     try {
@@ -553,6 +626,7 @@ const DeliveriesScreen = ({ navigation }: any) => {
 
   useEffect(() => {
     fetchOrders();
+    getCurrentLocation();
     
     // Subscribe to order changes
     const orderSubscription = supabase
@@ -595,11 +669,12 @@ const DeliveriesScreen = ({ navigation }: any) => {
       if (orderSubscription) orderSubscription.unsubscribe();
       if (profileSubscription) profileSubscription.unsubscribe();
     };
-  }, [fetchOrders]);
+  }, [fetchOrders, getCurrentLocation]);
 
   const onRefresh = () => {
     setRefreshing(true);
     fetchOrders();
+    getCurrentLocation();
   };
 
   const handleAcceptOrder = async (orderId: string) => {
@@ -746,6 +821,7 @@ const DeliveriesScreen = ({ navigation }: any) => {
               onShowQr={handleShowPaymentQr}
               otpValue={otpInputs[item.id]}
               setOtpValue={(text: string) => setOtpInputs(prev => ({ ...prev, [item.id]: text }))}
+              riderLocation={riderLocation}
             />
           )}
           renderSectionHeader={renderSectionHeader}
