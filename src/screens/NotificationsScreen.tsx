@@ -42,7 +42,7 @@ const NotificationsScreen = ({ }: any) => {
       const { data, error } = await supabase
         .from('notifications')
         .select('*')
-        .or(`user_id.eq.${uid},target_group.eq.rider`)
+        .or(`user_id.eq.${uid},and(user_id.is.null,target_group.eq.rider)`)
         .order('created_at', { ascending: false });
 
       if (error) throw error;

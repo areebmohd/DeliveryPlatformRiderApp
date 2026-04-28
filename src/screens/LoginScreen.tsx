@@ -153,7 +153,7 @@ const LoginScreen = ({ navigation }: Props) => {
           >
             <Text style={styles.linkText}>
               Don't have an account?{' '}
-              <Text style={styles.linkHighlight}>Sign Up</Text>
+              <Text style={styles.linkHighlight}>Create</Text>
             </Text>
           </TouchableOpacity>
 

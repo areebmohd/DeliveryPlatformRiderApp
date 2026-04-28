@@ -34,15 +34,19 @@ export const NotificationProvider = ({ children, userId }: { children: React.Rea
           filter: undefined,
         },
         async (payload) => {
-          // Only show local banner if the message didn't come through FCM
-          // or as a fallback for the unassigned "rider" group.
-          if (!payload.new.fcm_sent) {
-             await notificationService.displayLocalNotification(
-               payload.new.title,
-               payload.new.body,
-               payload.new.data
-             );
-          }
+          const { user_id, target_group } = payload.new;
+
+          if (target_group !== 'rider') return;
+
+          // If the notification targets a specific user, FCM will deliver it.
+          // Only show a local notification for true broadcasts (user_id is null).
+          if (user_id) return;
+
+          await notificationService.displayLocalNotification(
+            payload.new.title,
+            payload.new.body,
+            payload.new.data
+          );
         }
       )
       .subscribe();

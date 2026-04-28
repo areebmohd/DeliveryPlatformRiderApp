@@ -58,7 +58,8 @@ const ProfileSetupScreen = ({ navigation, route }: Props) => {
 
     const profile = profileRes.data;
     if (profile) {
-      setFullName(profile.full_name || '');
+      const fetchedName = profile.full_name || '';
+      setFullName(fetchedName.toLowerCase() === 'new user' ? '' : fetchedName);
       setPhone(profile.phone || '');
       setUpiId(profile.upi_id || '');
     }

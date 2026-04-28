@@ -219,8 +219,8 @@ const DeliveryMapScreen = ({ route }: any) => {
       return;
     }
 
-    // MEMORY/SPEED FIX: If the next stop hasn't changed, don't spam the routing API
-    const currentStopsHash = stops.map(s => `${s.longitude},${s.latitude}`).join('|');
+    // MEMORY/SPEED FIX: Only re-process if stops or rider position changed
+    const currentStopsHash = `${riderLocation.longitude.toFixed(5)},${riderLocation.latitude.toFixed(5)}|` + stops.map(s => `${s.longitude},${s.latitude}`).join('|');
     if (lastStopsHash === currentStopsHash && nextRouteLine) {
       return;
     }

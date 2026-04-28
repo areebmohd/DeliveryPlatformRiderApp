@@ -4,24 +4,29 @@ import {
   Text,
   StyleSheet,
   FlatList,
+  ScrollView,
   ActivityIndicator,
   RefreshControl,
   TouchableOpacity,
   TextInput,
   Image,
-  Alert,
+
 } from 'react-native';
+import { Spacing } from '../theme/colors';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { supabase } from '../lib/supabaseClient';
 import { Colors, UI } from '../theme/colors';
+import { useCustomAlert } from '../context/CustomAlertContext';
 
 const generateOTP = () => Math.floor(1000 + Math.random() * 9000).toString();
 
 const ReturnsScreen = ({ navigation }: any) => {
+  const { showAlert } = useCustomAlert();
   const [returns, setReturns] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
+  const [isVerified, setIsVerified] = useState<boolean | null>(null);
   
   const [otpInput, setOtpInput] = useState('');
   const [processingId, setProcessingId] = useState<string | null>(null);
@@ -31,6 +36,23 @@ const ReturnsScreen = ({ navigation }: any) => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
       setUserId(user.id);
+
+      // Check rider verification status
+      const { data: riderProfile } = await supabase
+        .from('rider_profiles')
+        .select('is_verified')
+        .eq('profile_id', user.id)
+        .maybeSingle();
+
+      const verificationStatus = riderProfile?.is_verified ?? false;
+      setIsVerified(verificationStatus);
+
+      if (!verificationStatus) {
+        setReturns([]);
+        setLoading(false);
+        setRefreshing(false);
+        return;
+      }
 
       const { data, error } = await supabase
         .from('returns')
@@ -79,13 +101,13 @@ const ReturnsScreen = ({ navigation }: any) => {
           updated_at: new Date().toISOString()
         })
         .eq('id', returnId)
-        .eq('status', 'approved'); // Ensure it hasn't been taken
+        .in('status', ['approved', 'refund_paid']); // Ensure it hasn't been taken
 
       if (error) throw error;
-      Alert.alert('Success', 'Return accepted! Proceed to pickup.');
+      showAlert('✅ Return Accepted', 'You have been assigned this return. Please proceed to pick up the item from the customer.');
       fetchReturns();
     } catch (err: any) {
-      Alert.alert('Error', err.message || 'Could not accept return');
+      showAlert('Error', err.message || 'Could not accept return');
     } finally {
       setProcessingId(null);
     }
@@ -93,7 +115,7 @@ const ReturnsScreen = ({ navigation }: any) => {
 
   const handleVerifyOTP = async (item: any, expectedOtp: string, nextStatus: string, isFinal: boolean = false) => {
     if (otpInput !== expectedOtp) {
-      Alert.alert('Invalid OTP', 'The OTP you entered is incorrect.');
+      showAlert('Invalid OTP', 'The OTP you entered is incorrect.');
       return;
     }
 
@@ -109,7 +131,7 @@ const ReturnsScreen = ({ navigation }: any) => {
       if (error) throw error;
 
       if (isFinal) {
-        Alert.alert('Success', 'Return fully completed!');
+        showAlert('✅ Completed', 'Return process fully completed!');
         // Delete image from storage
         if (item.image_url) {
           try {
@@ -125,13 +147,13 @@ const ReturnsScreen = ({ navigation }: any) => {
           }
         }
       } else {
-        Alert.alert('Verified', 'OTP verified successfully. Proceed to next step.');
+        showAlert('✅ Verified', 'OTP verified successfully. Proceed to the next step.');
       }
       
       setOtpInput('');
       fetchReturns();
     } catch (err: any) {
-      Alert.alert('Error', err.message || 'Failed to update status');
+      showAlert('Error', err.message || 'Failed to update status');
     } finally {
       setProcessingId(null);
     }
@@ -244,8 +266,30 @@ const ReturnsScreen = ({ navigation }: any) => {
 
   return (
     <View style={styles.container}>
-      {loading ? (
+      {loading && !refreshing ? (
         <ActivityIndicator size="large" color={Colors.primary} style={{ marginTop: 50 }} />
+      ) : isVerified === false ? (
+        <ScrollView
+          contentContainerStyle={styles.scrollFlexible}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchReturns(); }} />}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.verificationContainer}>
+            <View style={styles.verificationCard}>
+              <View style={styles.iconCircle}>
+                <Icon name="shield-account" size={50} color={Colors.primary} />
+              </View>
+              <Text style={styles.verificationTitle}>Verification Pending</Text>
+              <Text style={styles.verificationText}>
+                Your profile will be verified by admin then you will be able to handle returns
+              </Text>
+              <View style={styles.statusBadgePending}>
+                <Icon name="clock-outline" size={16} color={Colors.warning} />
+                <Text style={styles.statusBadgeText}>Awaiting Review</Text>
+              </View>
+            </View>
+          </View>
+        </ScrollView>
       ) : (
         <FlatList
           data={returns}
@@ -293,6 +337,57 @@ const styles = StyleSheet.create({
   verifyButton: { backgroundColor: Colors.primary, padding: 12, borderRadius: 8, alignItems: 'center' },
   verifyButtonText: { color: Colors.white, fontWeight: '700', fontSize: 15 },
   emptyText: { textAlign: 'center', color: Colors.textSecondary, marginTop: 40, fontSize: 16 },
+  scrollFlexible: { flexGrow: 1, justifyContent: 'center', padding: Spacing.md },
+  verificationContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  verificationCard: {
+    backgroundColor: Colors.white,
+    borderRadius: 24,
+    padding: 32,
+    alignItems: 'center',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    width: '100%',
+  },
+  iconCircle: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: Colors.primary + '15',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  verificationTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: Colors.text,
+    marginBottom: 12,
+  },
+  verificationText: {
+    fontSize: 15,
+    color: Colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 20,
+    paddingHorizontal: 16,
+  },
+  statusBadgePending: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: Colors.warning + '15',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  statusBadgeText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.warning,
+  },
 });
 
 export default ReturnsScreen;

@@ -360,7 +360,7 @@ const OrderCard = React.memo(({
         <Text style={styles.customerName}>
           {order.customer?.full_name || (Array.isArray(order.customer) ? order.customer[0]?.full_name : 'Customer')}
         </Text>
-        <Text style={styles.addressText}>{order.addresses?.address_line}, {order.addresses?.city}</Text>
+        <Text style={styles.addressText}>{order.addresses?.address_line}{order.addresses?.city ? `, ${order.addresses.city}` : ''}</Text>
         <TouchableOpacity 
           onPress={() => {
             const phone = order.customer?.phone || (Array.isArray(order.customer) ? order.customer[0]?.phone : null);
@@ -686,6 +686,24 @@ const DeliveriesScreen = ({ navigation }: any) => {
       // Check profile completeness before accepting
       const isProfileComplete = await checkProfileCompleteness(user.id);
       if (!isProfileComplete) return;
+
+      // Check if rider already has an active delivery
+      const { data: activeOrders, error: activeError } = await supabase
+        .from('orders')
+        .select('id')
+        .eq('rider_id', user.id)
+        .not('status', 'in', '(delivered,cancelled)')
+        .limit(1);
+
+      if (activeError) throw activeError;
+
+      if (activeOrders && activeOrders.length > 0) {
+        showAlert(
+          'Active Delivery In Progress',
+          'You already have an active delivery. Please complete it before accepting a new one.'
+        );
+        return;
+      }
 
       const { error } = await supabase
         .from('orders')
@@ -1510,6 +1528,11 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'flex-end',
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
   },
   modalContent: {
     backgroundColor: Colors.white,
@@ -1517,7 +1540,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: BorderRadius.xl,
     paddingTop: Spacing.sm,
     paddingHorizontal: Spacing.lg,
-    paddingBottom: Spacing.xl,
+    paddingBottom: 40,
     maxHeight: '80%',
   },
   modalHandle: {
