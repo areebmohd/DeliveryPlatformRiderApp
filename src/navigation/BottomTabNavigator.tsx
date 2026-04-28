@@ -4,6 +4,7 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
 import DashboardScreen from '../screens/DashboardScreen';
 import DeliveriesScreen from '../screens/DeliveriesScreen';
+import ReturnsScreen from '../screens/ReturnsScreen';
 import AccountScreen from '../screens/AccountScreen';
 
 import { Colors, UI } from '../theme/colors';
@@ -17,6 +18,8 @@ const TabBarIcon = ({ route, focused, color, size }: any) => {
     iconName = focused ? 'view-dashboard' : 'view-dashboard-outline';
   } else if (route.name === 'Deliveries') {
     iconName = focused ? 'moped' : 'moped-outline';
+  } else if (route.name === 'Returns') {
+    iconName = 'keyboard-return';
   } else if (route.name === 'Account') {
     iconName = focused ? 'account' : 'account-outline';
   }
@@ -57,6 +60,7 @@ const BottomTabNavigator = () => {
     >
       <Tab.Screen name="Dashboard" component={DashboardScreen} />
       <Tab.Screen name="Deliveries" component={DeliveriesScreen} />
+      <Tab.Screen name="Returns" component={ReturnsScreen} />
       <Tab.Screen name="Account" component={AccountScreen} />
     </Tab.Navigator>
   );

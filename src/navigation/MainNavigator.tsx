@@ -7,6 +7,7 @@ import DeliveryMapScreen from '../screens/DeliveryMapScreen';
 import PaymentsScreen from '../screens/PaymentsScreen';
 import SupportScreen from '../screens/SupportScreen';
 import ProductDetailsScreen from '../screens/ProductDetailsScreen';
+import ReturnsScreen from '../screens/ReturnsScreen';
 import { AuthStackParamList } from './types';
 import { useRiderLocation } from '../hooks/useRiderLocation';
 import { useProfileCheck } from '../hooks/useProfileCheck';
@@ -81,6 +82,11 @@ const MainNavigator = ({ userId }: { userId?: string }) => {
         name="ProductDetails" 
         component={ProductDetailsScreen} 
         options={{ title: 'Product Details' }} 
+      />
+      <Stack.Screen 
+        name="Returns" 
+        component={ReturnsScreen} 
+        options={{ title: 'Manage Returns' }} 
       />
     </Stack.Navigator>
   );

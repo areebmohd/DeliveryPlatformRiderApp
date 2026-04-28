@@ -12,4 +12,5 @@ export type AuthStackParamList = {
   Payments: undefined;
   Support: undefined;
   ProductDetails: { items: any[]; storeName: string; appliedOffers: any };
+  Returns: undefined;
 };
