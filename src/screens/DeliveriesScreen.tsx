@@ -26,6 +26,13 @@ const PAYMENT_UPI_ID = 'Q369351522@ybl';
 const PAYMENT_PAYEE_NAME = 'Delivery Platform';
 
 const getRiderDeliveryFee = (order: any) => {
+  const appliedOffers = order.applied_offers || {};
+  const hasAppOffer = !!appliedOffers.app_offer;
+  const hasStoreDeliveryOffer = Object.keys(appliedOffers).some(key => key.endsWith('_delivery'));
+
+  // If app offer is applied and NO store delivery offer, rider gets 0
+  if (hasAppOffer && !hasStoreDeliveryOffer) return 0;
+
   const riderFee = Number(order.rider_delivery_fee ?? 0);
   if (Number.isFinite(riderFee) && riderFee > 0) return riderFee;
 
@@ -111,10 +118,10 @@ const ProductItem = React.memo(({ item, items, storeOffer }: any) => {
             <Icon name="check-circle" size={14} color={Colors.success} style={{ marginRight: 4 }} />
           )}
           <View style={{ alignItems: 'flex-end', flexDirection: 'row', gap: 6 }}>
-            {discounted < original ? (
+            {discounted < original - 0.1 ? (
               <>
-                <Text style={styles.productPrice}>₹{Number(discounted).toFixed(2)}</Text>
-                <Text style={[styles.productPrice, { textDecorationLine: 'line-through', color: Colors.textSecondary, fontSize: 11 }]}>₹{Number(original).toFixed(2)}</Text>
+                <Text style={[styles.productPrice, { textDecorationLine: 'line-through', color: Colors.textSecondary, fontSize: 13 }]}>₹{Number(original).toFixed(2)}</Text>
+                <Text style={[styles.productPrice, { color: Colors.success }]}>₹{Number(discounted).toFixed(2)}</Text>
               </>
             ) : (
               <Text style={styles.productPrice}>₹{Number(original).toFixed(2)}</Text>
@@ -402,6 +409,19 @@ const OrderCard = React.memo(({
               >
                 <Text style={styles.completeBtnText}>Complete</Text>
               </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
+        {/* App Offer Display */}
+        {order.applied_offers?.app_offer && (
+          <View style={styles.appOfferBadge}>
+            <View style={styles.appOfferIconBox}>
+              <Icon name="ticket-percent" size={14} color={Colors.white} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.appOfferTitle}>App Offer</Text>
+              <Text style={styles.appOfferDesc}>Free delivery above ₹99</Text>
             </View>
           </View>
         )}
@@ -1739,6 +1759,35 @@ const styles = StyleSheet.create({
   scrollFlexible: {
     flexGrow: 1,
     justifyContent: 'center',
+  },
+  appOfferBadge: {
+    flexDirection: 'row',
+    backgroundColor: Colors.primaryLight,
+    padding: 10,
+    borderRadius: BorderRadius.md,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: Colors.primary + '20',
+    gap: 10,
+    alignItems: 'center',
+  },
+  appOfferIconBox: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: Colors.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  appOfferTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: Colors.primary,
+  },
+  appOfferDesc: {
+    fontSize: 11,
+    color: Colors.primary,
+    opacity: 0.8,
   },
 });
 
