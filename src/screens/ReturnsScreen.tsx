@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  FlatList,
+  SectionList,
   ScrollView,
   ActivityIndicator,
   RefreshControl,
@@ -59,18 +59,15 @@ const ReturnsScreen = ({ navigation }: any) => {
         .select(`
           *,
           products!inner(name, image_url, store_id, stores:store_id(name, address, phone)),
-          orders(order_number, addresses:delivery_address_id(*), total_amount),
+          orders:order_id(order_number, addresses:delivery_address_id(*), total_amount),
           profiles:user_id(full_name, phone)
         `)
-        .or(`status.in.(approved,refund_paid),rider_id.eq.${user.id}`)
+        .or(`status.in.(approved),rider_id.eq.${user.id}`)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
       
-      // Filter out completed ones unless we want to show history.
-      // Let's hide 'completed' from the active list, or maybe show it at the bottom.
-      const activeReturns = (data || []).filter(r => r.status !== 'completed' && r.status !== 'returned' && r.status !== 'rejected');
-      setReturns(activeReturns);
+      setReturns(data || []);
     } catch (e) {
       console.error('Error fetching returns:', e);
     } finally {
@@ -83,12 +80,49 @@ const ReturnsScreen = ({ navigation }: any) => {
     fetchReturns();
   }, [fetchReturns]);
 
+  const sections = useMemo(() => {
+    const grouped: { [key: string]: any[] } = {};
+    returns.forEach(item => {
+      const date = new Date(item.created_at);
+      const dateStr = date.toDateString();
+      
+      let label = dateStr;
+      const today = new Date().toDateString();
+      const yesterday = new Date(Date.now() - 86400000).toDateString();
+      
+      if (dateStr === today) label = 'Today';
+      else if (dateStr === yesterday) label = 'Yesterday';
+
+      if (!grouped[label]) grouped[label] = [];
+      grouped[label].push(item);
+    });
+
+    const sortedLabels = Object.keys(grouped).sort((a, b) => {
+      if (a === 'Today') return -1;
+      if (b === 'Today') return 1;
+      if (a === 'Yesterday') return -1;
+      if (b === 'Yesterday') return 1;
+      return new Date(b).getTime() - new Date(a).getTime();
+    });
+
+    return sortedLabels.map(key => ({
+      title: key,
+      data: grouped[key].sort((a: any, b: any) => {
+        const isAHistory = ['completed', 'returned', 'rejected'].includes(a.status);
+        const isBHistory = ['completed', 'returned', 'rejected'].includes(b.status);
+        if (isAHistory && !isBHistory) return 1;
+        if (!isAHistory && isBHistory) return -1;
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      }),
+    }));
+  }, [returns]);
+
   const handleAcceptReturn = async (returnId: string, returnType: string) => {
     setProcessingId(returnId);
     try {
       const otp1 = generateOTP();
       const otp2 = generateOTP();
-      const otp3 = returnType === 'Exchange' ? generateOTP() : null;
+      const otp3 = generateOTP();
 
       const { error } = await supabase
         .from('returns')
@@ -101,7 +135,7 @@ const ReturnsScreen = ({ navigation }: any) => {
           updated_at: new Date().toISOString()
         })
         .eq('id', returnId)
-        .in('status', ['approved', 'refund_paid']); // Ensure it hasn't been taken
+        .in('status', ['approved']); // Ensure it hasn't been taken
 
       if (error) throw error;
       showAlert('✅ Return Accepted', 'You have been assigned this return. Please proceed to pick up the item from the customer.');
@@ -161,14 +195,28 @@ const ReturnsScreen = ({ navigation }: any) => {
 
   const renderReturnItem = ({ item }: { item: any }) => {
     const isMine = item.rider_id === userId;
-    const isAvailable = item.status === 'approved' || item.status === 'refund_paid';
+    const isAvailable = item.status === 'approved';
+    const isHistory = ['completed', 'returned', 'rejected'].includes(item.status);
+
+    let statusLabel = item.status.replace(/_/g, ' ');
+    let statusColor = Colors.primary;
+    let badgeStyle = styles.badgeActive;
+
+    if (isAvailable) {
+      statusLabel = 'New Request';
+      statusColor = Colors.success;
+      badgeStyle = styles.badgeAvailable;
+    } else if (isHistory) {
+      statusColor = Colors.textSecondary;
+      badgeStyle = styles.badgeHistory;
+    }
 
     return (
-      <View style={styles.card}>
+      <View style={[styles.card, isHistory && styles.historyCard]}>
         <View style={styles.cardHeader}>
-          <Text style={styles.orderNumber}>Order #{item.orders?.order_number}</Text>
-          <View style={[styles.badge, isAvailable ? styles.badgeAvailable : styles.badgeActive]}>
-            <Text style={styles.badgeText}>{isAvailable ? 'New Request' : item.status.replace(/_/g, ' ')}</Text>
+          <Text style={styles.orderNumber}>Order #{item.orders?.order_number || 'N/A'}</Text>
+          <View style={[styles.badge, badgeStyle]}>
+            <Text style={[styles.badgeText, { color: statusColor }]}>{statusLabel}</Text>
           </View>
         </View>
 
@@ -186,8 +234,8 @@ const ReturnsScreen = ({ navigation }: any) => {
               <Text style={styles.detailTitle}><Icon name="account" size={16} color={Colors.primary} /> Customer</Text>
               <Text style={styles.detailText} numberOfLines={1}>{item.profiles?.full_name}</Text>
               <Text style={styles.detailText}>{item.profiles?.phone}</Text>
-              <Text style={styles.detailText} numberOfLines={2}>{item.orders?.addresses?.address_line}</Text>
-              <Text style={styles.detailText}>{item.orders?.addresses?.city}</Text>
+              <Text style={styles.detailText} numberOfLines={2}>{item.orders?.addresses?.address_line || 'Address unavailable'}</Text>
+              <Text style={styles.detailText}>{item.orders?.addresses?.city || ''}</Text>
             </View>
             <View style={styles.detailDivider} />
             <View style={styles.detailCol}>
@@ -223,7 +271,7 @@ const ReturnsScreen = ({ navigation }: any) => {
             <Text style={styles.otpTitle}>
               {item.status === 'rider_assigned' ? '1. Enter Customer Pickup OTP' :
                item.status === 'picked_up_from_customer' ? '2. Enter Store Drop OTP' :
-               item.status === 'dropped_at_store' && item.return_type === 'Exchange' ? '3. Enter Customer Exchange OTP' : ''}
+               item.status === 'dropped_at_store' ? '3. Enter Customer Exchange OTP' : ''}
             </Text>
             
             <TextInput
@@ -245,9 +293,8 @@ const ReturnsScreen = ({ navigation }: any) => {
                 if (item.status === 'rider_assigned') {
                   handleVerifyOTP(item, item.otp_customer_pickup, 'picked_up_from_customer');
                 } else if (item.status === 'picked_up_from_customer') {
-                  const isFinal = item.return_type === 'Refund';
-                  handleVerifyOTP(item, item.otp_store_drop, isFinal ? 'completed' : 'dropped_at_store', isFinal);
-                } else if (item.status === 'dropped_at_store' && item.return_type === 'Exchange') {
+                  handleVerifyOTP(item, item.otp_store_drop, 'dropped_at_store');
+                } else if (item.status === 'dropped_at_store') {
                   handleVerifyOTP(item, item.otp_customer_exchange, 'completed', true);
                 }
               }}
@@ -291,14 +338,22 @@ const ReturnsScreen = ({ navigation }: any) => {
           </View>
         </ScrollView>
       ) : (
-        <FlatList
-          data={returns}
+        <SectionList
+          sections={sections}
           renderItem={renderReturnItem}
+          renderSectionHeader={({ section: { title } }) => (
+            <View style={styles.dateSectionHeader}>
+              <Text style={styles.dateSectionTitle}>{title}</Text>
+            </View>
+          )}
           keyExtractor={(item) => item.id}
           contentContainerStyle={{ padding: 16 }}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchReturns(); }} />}
           ListEmptyComponent={
-            <Text style={styles.emptyText}>No active returns found.</Text>
+            <View style={styles.emptyContainer}>
+              <Icon name="package-variant" size={60} color={Colors.border} />
+              <Text style={styles.emptyText}>No returns found.</Text>
+            </View>
           }
         />
       )}
@@ -314,7 +369,21 @@ const styles = StyleSheet.create({
   badge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
   badgeAvailable: { backgroundColor: Colors.success + '20' },
   badgeActive: { backgroundColor: Colors.primary + '20' },
-  badgeText: { fontSize: 12, fontWeight: '700', color: Colors.primary, textTransform: 'uppercase' },
+  badgeHistory: { backgroundColor: Colors.textSecondary + '20' },
+  badgeText: { fontSize: 12, fontWeight: '800', textTransform: 'uppercase' },
+  historyCard: { opacity: 0.8, backgroundColor: '#f1f3f5', elevation: 1 },
+  dateSectionHeader: {
+    paddingVertical: 12,
+    marginBottom: 4,
+    backgroundColor: Colors.background,
+  },
+  dateSectionTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: Colors.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
   productRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
   productImage: { width: 50, height: 50, borderRadius: 8, marginRight: 12, backgroundColor: Colors.surface },
   productInfo: { flex: 1 },
@@ -336,7 +405,8 @@ const styles = StyleSheet.create({
   otpInput: { borderWidth: 1, borderColor: Colors.border, borderRadius: 8, padding: 12, fontSize: 18, textAlign: 'center', letterSpacing: 4, marginBottom: 12 },
   verifyButton: { backgroundColor: Colors.primary, padding: 12, borderRadius: 8, alignItems: 'center' },
   verifyButtonText: { color: Colors.white, fontWeight: '700', fontSize: 15 },
-  emptyText: { textAlign: 'center', color: Colors.textSecondary, marginTop: 40, fontSize: 16 },
+  emptyText: { textAlign: 'center', color: Colors.textSecondary, marginTop: 12, fontSize: 16, fontWeight: '600' },
+  emptyContainer: { alignItems: 'center', marginTop: 60 },
   scrollFlexible: { flexGrow: 1, justifyContent: 'center', padding: Spacing.md },
   verificationContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   verificationCard: {
