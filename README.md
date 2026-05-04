@@ -22,6 +22,8 @@ A high-performance, real-time delivery management application built for riders. 
 
 ---
 
+<img width="1920" height="1080" alt="riderApp" src="https://github.com/user-attachments/assets/6f6a7489-01f2-4cca-94f6-4d8d6e4a2b12" />
+
 ## 🚀 Tech Stack
 
 - **Framework**: [React Native](https://reactnative.dev/) (v0.84.1)
