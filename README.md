@@ -1,97 +1,119 @@
-This is a new [**React Native**](https://reactnative.dev) project, bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
+# 🛵 Delivery Platform Rider App
 
-# Getting Started
+[![React Native](https://img.shields.io/badge/React_Native-0.84.1-61DAFB?style=flat-square&logo=react)](https://reactnative.dev/)
+[![Supabase](https://img.shields.io/badge/Supabase-Database-3ECF8E?style=flat-square&logo=supabase)](https://supabase.com/)
+[![Firebase](https://img.shields.io/badge/Firebase-Messaging-FFCA28?style=flat-square&logo=firebase)](https://firebase.google.com/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.8.3-3178C6?style=flat-square&logo=typescript)](https://www.typescriptlang.org/)
 
-> **Note**: Make sure you have completed the [Set Up Your Environment](https://reactnative.dev/docs/set-up-your-environment) guide before proceeding.
+A high-performance, real-time delivery management application built for riders. This app enables riders to manage deliveries, track earnings, navigate using real-time maps, and handle returns efficiently.
 
-## Step 1: Start Metro
+---
 
-First, you will need to run **Metro**, the JavaScript build tool for React Native.
+## ✨ Key Features
 
-To start the Metro dev server, run the following command from the root of your React Native project:
+- **📊 Dynamic Dashboard**: Real-time overview of active orders, daily earnings, and performance metrics.
+- **📍 Real-time Tracking**: Integrated with **Mappls (MapmyIndia)** for precise navigation and live location updates.
+- **📦 Delivery Management**: Complete lifecycle of a delivery from pickup to drop-off with QR code verification.
+- **🔄 Returns Handling**: Dedicated interface for managing product returns and reverse logistics.
+- **💰 Earnings & Payments**: Transparent payout history, earning breakdowns, and payment status tracking.
+- **🔔 Smart Notifications**: Push notifications for new orders, status updates, and important alerts via **Firebase & Notifee**.
+- **👤 Profile Management**: Comprehensive rider profile setup, including document verification and vehicle details.
+- **🛠️ Support System**: Built-in support screen for quick assistance.
 
-```sh
-# Using npm
-npm start
+---
 
-# OR using Yarn
-yarn start
+## 🚀 Tech Stack
+
+- **Framework**: [React Native](https://reactnative.dev/) (v0.84.1)
+- **Language**: [TypeScript](https://www.typescriptlang.org/)
+- **Backend-as-a-Service**: [Supabase](https://supabase.com/) (Database & Auth)
+- **Maps & Location**: [Mappls React Native SDK](https://www.mappls.com/)
+- **Push Notifications**: [Firebase Messaging](https://firebase.google.com/docs/cloud-messaging) & [Notifee](https://notifee.app/)
+- **Storage**: [React Native Async Storage](https://react-native-async-storage.github.io/async-storage/)
+- **Icons**: [React Native Vector Icons](https://github.com/oblador/react-native-vector-icons)
+- **Vector Graphics**: [React Native SVG](https://github.com/software-mansion/react-native-svg)
+
+---
+
+## 🛠️ Getting Started
+
+### Prerequisites
+
+- [Node.js](https://nodejs.org/) (>= 22.11.0)
+- [React Native Environment Setup](https://reactnative.dev/docs/set-up-your-environment)
+- Android Studio / Xcode (for native builds)
+
+### Installation
+
+1. **Clone the repository**
+   ```bash
+   git clone <repository-url>
+   cd riderApp
+   ```
+
+2. **Install dependencies**
+   ```bash
+   npm install
+   ```
+
+3. **Configure Environment Variables**
+   Create a `.env` file in the root directory and add your keys (refer to `.env.example`):
+   ```env
+   SUPABASE_URL=your_supabase_url
+   SUPABASE_ANON_KEY=your_supabase_anon_key
+   MAP_SDK_KEY=your_mappls_sdk_key
+   ```
+
+4. **iOS Setup (Mac only)**
+   ```bash
+   cd ios && pod install && cd ..
+   ```
+
+### Running the App
+
+- **Android**
+  ```bash
+  npm run android
+  ```
+- **iOS**
+  ```bash
+  npm run ios
+  ```
+- **Start Metro Bundler**
+  ```bash
+  npm start
+  ```
+
+---
+
+## 📂 Project Structure
+
+```text
+riderApp/
+├── src/
+│   ├── assets/       # Images, Fonts, and static assets
+│   ├── components/   # Reusable UI components
+│   ├── context/      # React Context for state management (Auth, Theme)
+│   ├── hooks/        # Custom React hooks
+│   ├── lib/          # External library initializations (Supabase, etc.)
+│   ├── navigation/   # Navigation configurations (Stack, Tabs)
+│   ├── screens/      # Functional application screens
+│   ├── theme/        # Global styles and color constants
+│   ├── types/        # TypeScript interfaces and types
+│   └── utils/        # Helper functions and constants
+├── android/          # Android native project files
+└── ios/              # iOS native project files
 ```
 
-## Step 2: Build and run your app
+---
 
-With Metro running, open a new terminal window/pane from the root of your React Native project, and use one of the following commands to build and run your Android or iOS app:
+## 📝 License
 
-### Android
+This project is private and proprietary. All rights reserved.
 
-```sh
-# Using npm
-npm run android
+---
 
-# OR using Yarn
-yarn android
-```
+## 🤝 Support
 
-### iOS
+For support or queries, please reach out via the in-app support screen or contact the development team.
 
-For iOS, remember to install CocoaPods dependencies (this only needs to be run on first clone or after updating native deps).
-
-The first time you create a new project, run the Ruby bundler to install CocoaPods itself:
-
-```sh
-bundle install
-```
-
-Then, and every time you update your native dependencies, run:
-
-```sh
-bundle exec pod install
-```
-
-For more information, please visit [CocoaPods Getting Started guide](https://guides.cocoapods.org/using/getting-started.html).
-
-```sh
-# Using npm
-npm run ios
-
-# OR using Yarn
-yarn ios
-```
-
-If everything is set up correctly, you should see your new app running in the Android Emulator, iOS Simulator, or your connected device.
-
-This is one way to run your app — you can also build it directly from Android Studio or Xcode.
-
-## Step 3: Modify your app
-
-Now that you have successfully run the app, let's make changes!
-
-Open `App.tsx` in your text editor of choice and make some changes. When you save, your app will automatically update and reflect these changes — this is powered by [Fast Refresh](https://reactnative.dev/docs/fast-refresh).
-
-When you want to forcefully reload, for example to reset the state of your app, you can perform a full reload:
-
-- **Android**: Press the <kbd>R</kbd> key twice or select **"Reload"** from the **Dev Menu**, accessed via <kbd>Ctrl</kbd> + <kbd>M</kbd> (Windows/Linux) or <kbd>Cmd ⌘</kbd> + <kbd>M</kbd> (macOS).
-- **iOS**: Press <kbd>R</kbd> in iOS Simulator.
-
-## Congratulations! :tada:
-
-You've successfully run and modified your React Native App. :partying_face:
-
-### Now what?
-
-- If you want to add this new React Native code to an existing application, check out the [Integration guide](https://reactnative.dev/docs/integration-with-existing-apps).
-- If you're curious to learn more about React Native, check out the [docs](https://reactnative.dev/docs/getting-started).
-
-# Troubleshooting
-
-If you're having issues getting the above steps to work, see the [Troubleshooting](https://reactnative.dev/docs/troubleshooting) page.
-
-# Learn More
-
-To learn more about React Native, take a look at the following resources:
-
-- [React Native Website](https://reactnative.dev) - learn more about React Native.
-- [Getting Started](https://reactnative.dev/docs/environment-setup) - an **overview** of React Native and how setup your environment.
-- [Learn the Basics](https://reactnative.dev/docs/getting-started) - a **guided tour** of the React Native **basics**.
-- [Blog](https://reactnative.dev/blog) - read the latest official React Native **Blog** posts.
-- [`@facebook/react-native`](https://github.com/facebook/react-native) - the Open Source; GitHub **repository** for React Native.
