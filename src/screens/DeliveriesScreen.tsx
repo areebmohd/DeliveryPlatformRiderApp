@@ -325,6 +325,11 @@ const OrderCard = React.memo(({
             ]}>
               <Text style={[styles.statusText, { color: statusColor }]}>{statusLabel}</Text>
             </View>
+            {order.delivery_type === 'batch' && order.delivery_slot && (
+              <View style={[styles.statusBadge, { backgroundColor: Colors.primaryLight, marginLeft: 8 }]}>
+                <Text style={[styles.statusText, { color: Colors.primary }]}>{order.delivery_slot}</Text>
+              </View>
+            )}
           </View>
         </View>
         {!isHistory && (
@@ -453,6 +458,181 @@ const OrderCard = React.memo(({
   );
 });
 
+const BatchCard = React.memo(({ 
+  batch, 
+  navigation, 
+  onAccept, 
+  onStorePickUp, 
+  onShowBreakdown, 
+  onComplete, 
+  onShowQr, 
+  onShowOrderDetails,
+  otpInputs, 
+  setOtpInputs, 
+  riderLocation 
+}: any) => {
+  const isAvailable = batch.rider_id === null;
+  
+  // Aggregate stores and their products for the pickup phase
+  const storesMap = React.useMemo(() => {
+    const map: { [key: string]: { id: string, name: string, products: any[], isPickedUp: boolean, orderIds: number[] } } = {};
+    batch.orders.forEach((order: any) => {
+      order.order_items.forEach((oi: any) => {
+        const storeId = oi.products?.stores?.id || order.stores?.id;
+        const storeName = oi.products?.stores?.name || order.stores?.name || 'Store';
+        if (!map[storeId]) {
+          map[storeId] = { id: storeId, name: storeName, products: [], isPickedUp: true, orderIds: [] };
+        }
+        map[storeId].products.push({
+          ...oi.products,
+          quantity: oi.quantity,
+          order_number: order.order_number
+        });
+        if (!oi.is_picked_up) map[storeId].isPickedUp = false;
+        if (!map[storeId].orderIds.includes(order.id)) map[storeId].orderIds.push(order.id);
+      });
+    });
+    return Object.values(map);
+  }, [batch.orders]);
+
+  const isAllPickedUp = storesMap.every(s => s.isPickedUp);
+
+  // Aggregate customers and their orders for the delivery phase
+  const customersMap = React.useMemo(() => {
+    const map: { [key: string]: { id: string, name: string, address: string, orders: any[] } } = {};
+    batch.orders.forEach((order: any) => {
+      const rawName = order.customer?.full_name || (Array.isArray(order.customer) ? order.customer[0]?.full_name : 'Customer');
+      const rawAddress = order.addresses?.address_line || 'No Address';
+      
+      // Use name and address for grouping to ensure visual consistency
+      const nameKey = rawName.trim().toLowerCase();
+      const addrKey = rawAddress.trim().toLowerCase();
+      const key = `${nameKey}_${addrKey}`;
+      
+      if (!map[key]) {
+        map[key] = { 
+          id: key, 
+          name: rawName, 
+          address: rawAddress,
+          orders: [] 
+        };
+      }
+      map[key].orders.push(order);
+    });
+    return Object.values(map);
+  }, [batch.orders]);
+
+  return (
+    <View style={styles.batchCard}>
+      <View style={styles.batchHeader}>
+        <View style={styles.batchTitleRow}>
+          <View>
+            <Text style={styles.batchLabel}>{batch.delivery_slot} Batch</Text>
+            <Text style={styles.batchSublabel}>{batch.orders.length} Deliveries • {batch.date_label}</Text>
+          </View>
+        </View>
+        
+        {!isAvailable && (
+          <TouchableOpacity 
+             style={styles.batchMapBtn}
+             onPress={() => navigation.navigate('DeliveryMap', { 
+               batchOrders: batch.orders,
+               batchSlot: batch.delivery_slot 
+             })}
+          >
+            <Icon name="map-marker-path" size={20} color={Colors.white} />
+            <Text style={styles.batchMapBtnText}>Route</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
+      <View style={styles.batchOrdersList}>
+        {!isAllPickedUp ? (
+          // PICKUP PHASE: Group by Store
+          <View>
+            <View style={styles.batchPhaseHeader}>
+              <Icon name="store" size={16} color={Colors.primary} />
+              <Text style={styles.batchPhaseTitle}>Pickup Phase: Shops</Text>
+            </View>
+            {storesMap.map((store: any, idx: number) => (
+              <View key={store.id} style={[styles.batchStoreItem, idx === storesMap.length - 1 && { borderBottomWidth: 0 }]}>
+                <View style={styles.batchStoreHeader}>
+                  <Text style={styles.batchStoreName}>{store.name}</Text>
+                  {store.isPickedUp ? (
+                    <View style={styles.miniSuccessBadge}>
+                      <Icon name="check-circle" size={14} color={Colors.success} />
+                      <Text style={styles.miniSuccessText}>Collected</Text>
+                    </View>
+                  ) : !isAvailable && (
+                    <TouchableOpacity 
+                      style={styles.batchStorePickupBtn}
+                      onPress={() => {
+                        // Mark picked up for all orders from this store in the batch
+                        store.orderIds.forEach((oid: number) => onStorePickUp(oid, store.id));
+                      }}
+                    >
+                      <Text style={styles.batchStorePickupText}>Mark Picked Up</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+                <View style={styles.batchProductList}>
+                  {store.products.map((p: any, pIdx: number) => (
+                    <View key={`${p.id}_${pIdx}`} style={styles.batchProductItem}>
+                      <Text style={styles.batchProductText}>• {p.name} (x{p.quantity})</Text>
+                      <Text style={styles.batchProductOrderRef}>#{p.order_number}</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            ))}
+          </View>
+        ) : (
+          // DELIVERY PHASE: Group by Customer
+          <View>
+            <View style={styles.batchPhaseHeader}>
+              <Icon name="account-group" size={16} color={Colors.success} />
+              <Text style={styles.batchPhaseTitle}>Delivery Phase: Customers</Text>
+            </View>
+            {customersMap.map((customer: any, idx: number) => (
+              <View key={customer.id} style={[styles.batchCustomerItem, idx === customersMap.length - 1 && { borderBottomWidth: 0 }]}>
+                <View style={styles.batchCustomerHeader}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.batchCustomerName}>{customer.name}</Text>
+                    <Text style={styles.batchCustomerAddress} numberOfLines={1}>{customer.address}</Text>
+                  </View>
+                  <TouchableOpacity 
+                    style={styles.batchCustomerDetailsBtn}
+                    onPress={() => onShowOrderDetails(customer.orders)}
+                  >
+                    <Text style={styles.batchCustomerDetailsText}>
+                      {customer.orders.length > 1 ? `${customer.orders.length} Orders` : 'Details'}
+                    </Text>
+                    <Icon name="chevron-right" size={16} color={Colors.primary} />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
+      </View>
+
+      {isAvailable && (
+        <TouchableOpacity style={styles.batchAcceptBtn} onPress={() => onAccept(batch.orders)}>
+          <Text style={styles.batchAcceptBtnText}>Accept Entire Batch</Text>
+        </TouchableOpacity>
+      )}
+
+      {!isAvailable && (
+        <View style={styles.batchFooter}>
+           <Text style={styles.batchFooterHint}>
+             {isAllPickedUp ? "All items collected. Deliver to customers." : "Go to Map for optimized pickup route."}
+           </Text>
+        </View>
+      )}
+    </View>
+  );
+});
+
 const DeliveriesScreen = ({ navigation }: any) => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -465,6 +645,10 @@ const DeliveriesScreen = ({ navigation }: any) => {
   const [breakdownModal, setBreakdownModal] = useState<{ visible: boolean; order: any }>({ 
     visible: false, 
     order: null 
+  });
+  const [orderDetailsModal, setOrderDetailsModal] = useState<{ visible: boolean; orders: any[] }>({
+    visible: false,
+    orders: []
   });
   const [qrModal, setQrModal] = useState<{ visible: boolean; order: any; upiUri: string }>({
     visible: false,
@@ -489,7 +673,10 @@ const DeliveriesScreen = ({ navigation }: any) => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      const { data: activeOrders, error: activeError } = await supabase
+
+      // 1. Unified Fetch: All active orders (Assigned to me OR Unassigned)
+      // We do a broad fetch to ensure no orders are missed due to RPC filters
+      const { data: allOrders, error: allOrdersError } = await supabase
         .from('orders')
         .select(`
           *,
@@ -511,12 +698,12 @@ const DeliveriesScreen = ({ navigation }: any) => {
             )
           )
         `)
-        .eq('rider_id', user.id)
-        .not('status', 'in', '(delivered,cancelled)');
+        .or(`rider_id.eq.${user.id},rider_id.is.null`)
+        .not('status', 'in', '("delivered","cancelled")');
 
-      if (activeError) throw activeError;
+      if (allOrdersError) throw allOrdersError;
 
-      let fetchedOrders: any[] = activeOrders || [];
+      let fetchedOrders: any[] = allOrders || [];
       
       const { data: riderProfile } = await supabase
         .from('rider_profiles')
@@ -534,34 +721,23 @@ const DeliveriesScreen = ({ navigation }: any) => {
         return;
       }
       
-      const vehicleType = (riderProfile?.vehicle_type || 'bike').toLowerCase();
-      
-      const { data: availableOrders, error: availableError } = await supabase
-        .rpc('get_nearby_unassigned_orders', { rider_vehicle_type: vehicleType });
-
-      if (availableError) {
-        // Reduced log noise
-      } else if (availableOrders) {
-        const availableIds = new Set(fetchedOrders.map(o => o.id));
-        const filteredAvailable = availableOrders.filter((o: any) => !availableIds.has(o.id));
-        fetchedOrders = [...fetchedOrders, ...filteredAvailable];
-
-        if (availableOrders.length > 0) {
-          const offers = availableOrders.map((o: any) => ({
-            rider_id: user.id,
-            order_id: o.id
-          }));
-          
-          supabase
-            .from('rider_offer_logs')
-            .upsert(offers, { onConflict: 'rider_id, order_id' })
-            .then(({ error: _error }) => {
-               if (_error) console.error('Error logging offers:', _error.message);
-            });
-        }
+      // Log all unassigned orders as offers for the rider
+      const unassigned = fetchedOrders.filter(o => !o.rider_id);
+      if (unassigned.length > 0) {
+        const offers = unassigned.map((o: any) => ({
+          rider_id: user.id,
+          order_id: o.id
+        }));
+        
+        supabase
+          .from('rider_offer_logs')
+          .upsert(offers, { onConflict: 'rider_id, order_id' })
+          .then(({ error: err }) => {
+            if (err) console.error('Error logging offers:', err.message);
+          });
       }
 
-      const { data: historyOrders } = await supabase
+      const { data: historyOrders, error: historyError } = await supabase
         .from('orders')
         .select(`
           *,
@@ -588,12 +764,15 @@ const DeliveriesScreen = ({ navigation }: any) => {
         .order('created_at', { ascending: false })
         .limit(10);
       
-      if (historyOrders) {
+      if (historyError) {
+        console.warn('History orders fetch error:', historyError);
+      } else if (historyOrders) {
         fetchedOrders = [...fetchedOrders, ...historyOrders];
       }
       setOrders(fetchedOrders);
-    } catch {
-      showAlert('Error', 'Failed to fetch orders. Please try again.');
+    } catch (e: any) {
+      console.error('Fetch Orders Error:', e);
+      showAlert('Error', `Failed to fetch orders: ${e.message || 'Unknown error'}`);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -602,19 +781,62 @@ const DeliveriesScreen = ({ navigation }: any) => {
 
   const sections = React.useMemo(() => {
     const grouped: { [key: string]: any[] } = {};
+    const batches: { [key: string]: any } = {}; // slotLabel -> batchObject
+
     orders.forEach(order => {
+      const isHistory = order.status === 'delivered' || order.status === 'cancelled';
+      
       const date = new Date(order.created_at);
       const dateStr = date.toDateString();
+      const todayDate = new Date();
+      const todayStr = todayDate.toDateString();
+      const yesterdayStr = new Date(todayDate.getTime() - 86400000).toDateString();
       
       let label = dateStr;
-      const today = new Date().toDateString();
-      const yesterday = new Date(Date.now() - 86400000).toDateString();
-      
-      if (dateStr === today) label = 'Today';
-      else if (dateStr === yesterday) label = 'Yesterday';
+      if (dateStr === todayStr) label = 'Today';
+      else if (dateStr === yesterdayStr) label = 'Yesterday';
 
       if (!grouped[label]) grouped[label] = [];
-      grouped[label].push(order);
+      
+      const isBatchOrder = !!order.delivery_slot && !isHistory;
+      
+      if (isBatchOrder) {
+        // Group into a virtual batch object. 
+        // We IGNORE the creation date and rider_id for the key to ensure ONE box per slot.
+        let normalizedSlot = (order.delivery_slot || '').trim();
+        const upperSlot = normalizedSlot.toUpperCase();
+        if (upperSlot === '2 PM' || upperSlot === '2:00 PM') normalizedSlot = '2-3 PM';
+        if (upperSlot === '8 PM' || upperSlot === '8:00 PM') normalizedSlot = '8-9 PM';
+
+        const internalSlotKey = normalizedSlot.toLowerCase().replace(/slot/g, '').replace(/[^a-z0-9]/g, '');
+        // Force all batches to "Today" section for unified display
+        const batchLabel = 'Today';
+        if (!grouped[batchLabel]) grouped[batchLabel] = [];
+        
+        const slotKey = `batch_${internalSlotKey}`;
+        
+        if (!batches[slotKey]) {
+          batches[slotKey] = {
+            id: slotKey,
+            is_batch: true,
+            delivery_slot: normalizedSlot,
+            date_label: batchLabel,
+            orders: [],
+            status: order.status, 
+            rider_id: order.rider_id // Will be overwritten if any order is assigned
+          };
+          grouped[batchLabel].push(batches[slotKey]);
+        }
+        
+        // If any order in the batch is assigned to current rider, the whole batch is "Active"
+        if (order.rider_id) {
+          batches[slotKey].rider_id = order.rider_id;
+        }
+        batches[slotKey].orders.push(order);
+      } else {
+        // Regular individual order
+        grouped[label].push(order);
+      }
     });
 
     const sortedLabels = Object.keys(grouped).sort((a, b) => {
@@ -632,6 +854,11 @@ const DeliveriesScreen = ({ navigation }: any) => {
         const isBHistory = b.status === 'delivered' || b.status === 'cancelled';
         if (isAHistory && !isBHistory) return 1;
         if (!isAHistory && isBHistory) return -1;
+        
+        // Push batches to the top of active deliveries
+        if (a.is_batch && !b.is_batch) return -1;
+        if (!a.is_batch && b.is_batch) return 1;
+
         return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
       }),
     }));
@@ -695,6 +922,47 @@ const DeliveriesScreen = ({ navigation }: any) => {
     setRefreshing(true);
     fetchOrders();
     getCurrentLocation();
+  };
+
+  const handleAcceptBatch = async (batchOrders: any[]) => {
+    try {
+      setLoading(true);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const isProfileComplete = await checkProfileCompleteness(user.id);
+      if (!isProfileComplete) return;
+
+      // Check for active non-batch deliveries
+      const { data: activeOrders } = await supabase
+        .from('orders')
+        .select('id')
+        .eq('rider_id', user.id)
+        .not('status', 'in', '(delivered,cancelled)')
+        .limit(1);
+
+      if (activeOrders && activeOrders.length > 0) {
+        showAlert(
+          'Active Delivery In Progress',
+          'You already have an active delivery. Please complete it before accepting a new batch.'
+        );
+        return;
+      }
+
+      const orderIds = batchOrders.map(o => o.id);
+      const { error } = await supabase
+        .from('orders')
+        .update({ rider_id: user.id })
+        .in('id', orderIds);
+
+      if (error) throw error;
+      showAlert('Success', `Batch accepted! ${orderIds.length} orders are now in your active deliveries.`);
+      fetchOrders();
+    } catch (error: any) {
+      showAlert('Error', error.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleAcceptOrder = async (orderId: string) => {
@@ -790,6 +1058,11 @@ const DeliveriesScreen = ({ navigation }: any) => {
     }
   };
 
+  const handleShowOrderDetails = (orders: any) => {
+    const ordersArray = Array.isArray(orders) ? orders : [orders];
+    setOrderDetailsModal({ visible: true, orders: ordersArray });
+  };
+
   const handleShowPaymentQr = (order: any) => {
     setQrModal({
       visible: true,
@@ -848,20 +1121,39 @@ const DeliveriesScreen = ({ navigation }: any) => {
         <SectionList
           sections={sections}
           keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <OrderCard 
-              order={item}
-              navigation={navigation}
-              onAccept={handleAcceptOrder}
-              onStorePickUp={handleStorePickUp}
-              onShowBreakdown={handleShowBreakdown}
-              onComplete={handleCompleteOrder}
-              onShowQr={handleShowPaymentQr}
-              otpValue={otpInputs[item.id]}
-              setOtpValue={(text: string) => setOtpInputs(prev => ({ ...prev, [item.id]: text }))}
-              riderLocation={riderLocation}
-            />
-          )}
+          renderItem={({ item }) => {
+            if (item.is_batch) {
+              return (
+                <BatchCard 
+                  batch={item}
+                  navigation={navigation}
+                  onAccept={handleAcceptBatch}
+                  onStorePickUp={handleStorePickUp}
+                  onShowBreakdown={handleShowBreakdown}
+                  onComplete={handleCompleteOrder}
+                  onShowQr={handleShowPaymentQr}
+                  onShowOrderDetails={handleShowOrderDetails}
+                  otpInputs={otpInputs}
+                  setOtpInputs={setOtpInputs}
+                  riderLocation={riderLocation}
+                />
+              );
+            }
+            return (
+              <OrderCard 
+                order={item}
+                navigation={navigation}
+                onAccept={handleAcceptOrder}
+                onStorePickUp={handleStorePickUp}
+                onShowBreakdown={handleShowBreakdown}
+                onComplete={handleCompleteOrder}
+                onShowQr={handleShowPaymentQr}
+                otpValue={otpInputs[item.id]}
+                setOtpValue={(text: string) => setOtpInputs(prev => ({ ...prev, [item.id]: text }))}
+                riderLocation={riderLocation}
+              />
+            );
+          }}
           renderSectionHeader={renderSectionHeader}
           contentContainerStyle={styles.scrollContent}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
@@ -1016,6 +1308,42 @@ const DeliveriesScreen = ({ navigation }: any) => {
             >
               <Text style={styles.closeBtnTextModal}>Done</Text>
             </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={orderDetailsModal.visible}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setOrderDetailsModal({ ...orderDetailsModal, visible: false })}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.detailsModalContent}>
+            <View style={styles.detailsModalHeader}>
+              <Text style={styles.detailsModalTitle}>Order Details</Text>
+              <TouchableOpacity onPress={() => setOrderDetailsModal({ ...orderDetailsModal, visible: false })}>
+                <Icon name="close" size={24} color={Colors.text} />
+              </TouchableOpacity>
+            </View>
+            <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
+              {orderDetailsModal.orders.map((order, idx) => (
+                <View key={order.id} style={{ padding: 16, borderBottomWidth: idx < orderDetailsModal.orders.length - 1 ? 8 : 0, borderBottomColor: Colors.border + '50' }}>
+                  <OrderCard 
+                    order={order}
+                    navigation={navigation}
+                    onAccept={handleAcceptOrder}
+                    onStorePickUp={handleStorePickUp}
+                    onShowBreakdown={handleShowBreakdown}
+                    onComplete={handleCompleteOrder}
+                    onShowQr={handleShowPaymentQr}
+                    otpValue={otpInputs[order.id]}
+                    setOtpValue={(text: string) => setOtpInputs(prev => ({ ...prev, [order.id]: text }))}
+                    riderLocation={riderLocation}
+                  />
+                </View>
+              ))}
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -1546,8 +1874,29 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'flex-end',
+  },
+  detailsModalContent: {
+    backgroundColor: Colors.white,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: '90%',
+  },
+  detailsModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  detailsModalTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: Colors.text,
+  },
+  modalContent: {
     position: 'absolute',
     top: 0,
     left: 0,
@@ -1788,6 +2137,263 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: Colors.primary,
     opacity: 0.8,
+  },
+  // Batch Card Styles
+  batchCard: {
+    backgroundColor: Colors.white,
+    borderRadius: BorderRadius.xl,
+    padding: Spacing.md,
+    marginBottom: Spacing.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  batchHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.md,
+    paddingBottom: Spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  batchTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  batchIconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: Colors.primaryLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  batchLabel: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: Colors.text,
+  },
+  batchSublabel: {
+    fontSize: 13,
+    color: Colors.textSecondary,
+    fontWeight: '600',
+  },
+  batchMapBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: BorderRadius.md,
+    gap: 6,
+  },
+  batchMapBtnText: {
+    color: Colors.white,
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  batchOrdersList: {
+    backgroundColor: '#f8fafc',
+    borderRadius: BorderRadius.lg,
+    padding: Spacing.sm,
+    marginBottom: Spacing.sm,
+  },
+  batchOrderItem: {
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border + '50',
+  },
+  batchOrderHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  batchOrderNumber: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: Colors.text,
+  },
+  miniStatusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  miniStatusText: {
+    fontSize: 11,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+  },
+  batchOrderContent: {
+    gap: 4,
+  },
+  batchDetailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  batchDetailText: {
+    fontSize: 13,
+    color: Colors.textSecondary,
+    fontWeight: '600',
+    flex: 1,
+  },
+  expandOrderBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    alignSelf: 'flex-start',
+    gap: 4,
+  },
+  expandOrderText: {
+    fontSize: 13,
+    color: Colors.primary,
+    fontWeight: '700',
+  },
+  batchAcceptBtn: {
+    backgroundColor: Colors.primary,
+    paddingVertical: 14,
+    borderRadius: BorderRadius.md,
+    alignItems: 'center',
+    marginTop: Spacing.sm,
+  },
+  batchAcceptBtnText: {
+    color: Colors.white,
+    fontWeight: '800',
+    fontSize: 16,
+  },
+  batchFooter: {
+    marginTop: Spacing.sm,
+    alignItems: 'center',
+  },
+  batchFooterHint: {
+    fontSize: 12,
+    color: Colors.primary,
+    fontWeight: '700',
+    fontStyle: 'italic',
+  },
+  // Phase UI Styles
+  batchPhaseHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+    marginBottom: 8,
+  },
+  batchPhaseTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: Colors.text,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  batchStoreItem: {
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border + '50',
+  },
+  batchStoreHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  batchStoreName: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: Colors.text,
+    flex: 1,
+  },
+  batchStorePickupBtn: {
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  batchStorePickupText: {
+    color: Colors.white,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  miniSuccessBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#f0fdf4',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#bbf7d0',
+  },
+  miniSuccessText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: Colors.success,
+  },
+  batchProductList: {
+    gap: 4,
+  },
+  batchProductItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  batchProductText: {
+    fontSize: 13,
+    color: Colors.textSecondary,
+    fontWeight: '600',
+  },
+  batchProductOrderRef: {
+    fontSize: 11,
+    color: Colors.textSecondary,
+    backgroundColor: Colors.border + '50',
+    paddingHorizontal: 4,
+    borderRadius: 4,
+    fontWeight: '700',
+  },
+  batchCustomerItem: {
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border + '50',
+  },
+  batchCustomerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  batchCustomerName: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: Colors.text,
+  },
+  batchCustomerAddress: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  batchCustomerDetailsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    backgroundColor: Colors.primaryLight,
+    borderRadius: 8,
+  },
+  batchCustomerDetailsText: {
+    fontSize: 12,
+    color: Colors.primary,
+    fontWeight: '700',
   },
 });
 

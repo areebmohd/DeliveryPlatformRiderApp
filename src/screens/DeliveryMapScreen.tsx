@@ -15,7 +15,7 @@ import Geolocation from 'react-native-geolocation-service';
 
 
 const DeliveryMapScreen = ({ route }: any) => {
-  const { orderId } = route.params;
+  const { orderId, batchOrders, batchSlot } = route.params;
   const insets = useSafeAreaInsets();
   const cameraRef = useRef<any>(null);
 
@@ -27,6 +27,8 @@ const DeliveryMapScreen = ({ route }: any) => {
 
   const [nextRouteLine, setNextRouteLine] = useState<any>(null);
   const [lastStopsHash, setLastStopsHash] = useState<string>('');
+
+
 
   const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
     const R = 6371; // km
@@ -72,6 +74,64 @@ const DeliveryMapScreen = ({ route }: any) => {
     return null;
   }, []);
 
+  const stops = React.useMemo(() => {
+    if (!riderLocation || activeOrders.length === 0) return [];
+
+    let calculatedStops: any[] = [];
+    const allOrdersPickedUp = activeOrders.every(o => o.status === 'picked_up');
+
+    if (allOrdersPickedUp) {
+      // DELIVERY PHASE: All items picked up, route to customers
+      calculatedStops = activeOrders
+        .map(o => ({
+          ...parseLocation(o.addresses?.location),
+          id: o.id,
+          type: 'customer'
+        }))
+        .filter(l => !!l.latitude)
+        .sort((a, b) => {
+          const distA = calculateDistance(riderLocation.latitude, riderLocation.longitude, a.latitude, a.longitude);
+          const distB = calculateDistance(riderLocation.latitude, riderLocation.longitude, b.latitude, b.longitude);
+          return distA - distB;
+        });
+    } else {
+      // PICKUP PHASE: Collect products from all stores
+      const pendingStores = new Map();
+      activeOrders.forEach(order => {
+        if (order.status !== 'picked_up') {
+          // Direct store
+          if (order.stores) {
+            const storeItems = order.order_items.filter((oi: any) => (oi.products?.stores?.id || order.stores?.id) === order.stores.id);
+            if (!storeItems.every((oi: any) => oi.is_picked_up)) {
+              pendingStores.set(order.stores.id, order.stores);
+            }
+          }
+          // Stores from items
+          order.order_items?.forEach((item: any) => {
+            const s = item.products?.stores;
+            if (s && !item.is_picked_up) {
+              pendingStores.set(s.id, s);
+            }
+          });
+        }
+      });
+
+      calculatedStops = Array.from(pendingStores.values())
+        .map(s => ({
+          ...parseLocation(s.location),
+          id: s.id,
+          type: 'store'
+        }))
+        .filter(l => !!l.latitude)
+        .sort((a, b) => {
+          const distA = calculateDistance(riderLocation.latitude, riderLocation.longitude, a.latitude, a.longitude);
+          const distB = calculateDistance(riderLocation.latitude, riderLocation.longitude, b.latitude, b.longitude);
+          return distA - distB;
+        });
+    }
+    return calculatedStops;
+  }, [activeOrders, riderLocation, parseLocation]);
+
   const getCurrentRiderLocation = useCallback(() => {
     Geolocation.getCurrentPosition(
       (position) => {
@@ -91,7 +151,7 @@ const DeliveryMapScreen = ({ route }: any) => {
       if (!user) return;
       setCurrentUserId(user.id);
 
-      const { data, error } = await supabase
+      let query = supabase
         .from('orders')
         .select(`
           *,
@@ -105,28 +165,29 @@ const DeliveryMapScreen = ({ route }: any) => {
               stores (id, name, location, address)
             )
           )
-        `)
-        .or(`rider_id.eq.${user.id},id.eq.${orderId}`)
-        .in('status', ['waiting_for_pickup', 'picked_up']);
+        `);
 
+      if (batchOrders && batchOrders.length > 0) {
+        const ids = batchOrders.map((o: any) => o.id);
+        query = query.in('id', ids);
+      } else {
+        query = query.or(`rider_id.eq.${user.id},id.eq.${orderId}`)
+                     .in('status', ['waiting_for_pickup', 'picked_up']);
+      }
+
+      const { data, error } = await query;
       if (error) throw error;
       
       const orders = data || [];
       setActiveOrders(orders);
 
-      // Extract unique stores (all stores from active orders)
+      // Extract unique stores
       const storeMap = new Map();
       orders.forEach(order => {
-        // Direct store from store_id
-        if (order.stores) {
-          storeMap.set(order.stores.id, order.stores);
-        }
-        // Stores from items
+        if (order.stores) storeMap.set(order.stores.id, order.stores);
         order.order_items?.forEach((item: any) => {
           const s = item.products?.stores;
-          if (s) {
-            storeMap.set(s.id, s);
-          }
+          if (s) storeMap.set(s.id, s);
         });
       });
       setStores(Array.from(storeMap.values()));
@@ -136,7 +197,7 @@ const DeliveryMapScreen = ({ route }: any) => {
     } finally {
       setLoading(false);
     }
-  }, [orderId]);
+  }, [orderId, batchOrders]);
 
   const fitToStops = useCallback((stops: any[]) => {
     if (!cameraRef.current || !riderLocation) return;
@@ -171,51 +232,11 @@ const DeliveryMapScreen = ({ route }: any) => {
   }, [riderLocation]);
 
   const calculateAndFetchRoute = useCallback(async () => {
-    if (!riderLocation || activeOrders.length === 0) return;
-
-    const selectedOrder = activeOrders.find(o => o.id === orderId) || activeOrders[0];
-    if (!selectedOrder) return;
-
-    const customerLoc = parseLocation(selectedOrder.addresses?.location);
-
-    let rawStops: any[] = [];
-    let stops: any[] = [];
-
-    if (selectedOrder.status === 'picked_up') {
-      if (customerLoc) stops = [customerLoc];
-    } else {
-      const orderStores = new Map();
-      if (selectedOrder.stores) orderStores.set(selectedOrder.stores.id, selectedOrder.stores);
-      
-      selectedOrder.order_items?.forEach((item: any) => {
-        const s = item.products?.stores;
-        if (s) {
-          const storeItems = selectedOrder.order_items.filter((oi: any) => 
-            (oi.products?.stores?.id || selectedOrder.stores?.id) === s.id
-          );
-          const allPicked = storeItems.every((oi: any) => oi.is_picked_up);
-          if (!allPicked) orderStores.set(s.id, s);
-        }
-      });
-
-      // Sort stores by proximity to rider
-      const storeStops = Array.from(orderStores.values())
-        .map(s => parseLocation(s.location))
-        .filter(l => !!l)
-        .sort((a, b) => {
-          const distA = calculateDistance(riderLocation.latitude, riderLocation.longitude, a.latitude, a.longitude);
-          const distB = calculateDistance(riderLocation.latitude, riderLocation.longitude, b.latitude, b.longitude);
-          return distA - distB;
-        });
-      
-      stops = [...storeStops];
-      // Customer is ALWAYS the final stop
-      if (customerLoc) stops.push(customerLoc);
-    }
-
-    if (stops.length === 0) {
-      setNextRouteLine(null);
-      setLastStopsHash('');
+    if (!riderLocation || activeOrders.length === 0 || stops.length === 0) {
+      if (stops.length === 0) {
+        setNextRouteLine(null);
+        setLastStopsHash('');
+      }
       return;
     }
 
@@ -227,7 +248,8 @@ const DeliveryMapScreen = ({ route }: any) => {
 
     try {
       // THE FIX: Only show route line if the order is accepted by this rider
-      if (selectedOrder.rider_id !== currentUserId) {
+      const selectedOrder = activeOrders[0];
+      if (selectedOrder && selectedOrder.rider_id !== currentUserId) {
         setNextRouteLine(null);
         setLastStopsHash('');
         return;
@@ -253,7 +275,7 @@ const DeliveryMapScreen = ({ route }: any) => {
     } catch (error) {
       console.error('Error updating path:', error);
     }
-  }, [riderLocation, activeOrders, orderId, lastStopsHash, nextRouteLine, fitToStops, parseLocation]);
+  }, [riderLocation, activeOrders, lastStopsHash, nextRouteLine, fitToStops, stops, currentUserId]);
 
   useEffect(() => {
     fetchActiveOrders();
@@ -404,15 +426,17 @@ const DeliveryMapScreen = ({ route }: any) => {
       {/* Selected Info Card */}
       {selectedOrder && (
         <View style={[styles.infoCard, { paddingBottom: insets.bottom + Spacing.md }]}>
-          <Text style={styles.selectedOrderTitle}>Focus: #{selectedOrder.order_number}</Text>
+          <Text style={styles.selectedOrderTitle}>
+            {batchSlot ? `${batchSlot} Batch` : `Focus: #${selectedOrder?.order_number}`}
+          </Text>
           
-          {selectedOrder.status !== 'picked_up' ? (
+          {!activeOrders.every(o => o.status === 'picked_up') ? (
             <View style={styles.infoRow}>
               <Icon name="store-marker" size={24} color={Colors.warning} />
               <View style={styles.infoText}>
-                <Text style={styles.infoLabel}>Next Stops: {stores.length} Pickup(s)</Text>
+                <Text style={styles.infoLabel}>Pickup Phase: {stops.length} Store(s) Left</Text>
                 <Text style={styles.infoValue} numberOfLines={1}>
-                  {stores.map(s => s.name).join(', ')}
+                  Collect items from pending stores
                 </Text>
               </View>
             </View>
@@ -420,22 +444,15 @@ const DeliveryMapScreen = ({ route }: any) => {
             <View style={styles.infoRow}>
               <Icon name="flag-checkered" size={24} color={Colors.success} />
               <View style={styles.infoText}>
-                <Text style={styles.infoLabel}>Drop-off Location</Text>
-                <Text style={styles.infoValue} numberOfLines={1}>{selectedOrder.addresses?.address_line}</Text>
+                <Text style={styles.infoLabel}>Delivery Phase: {activeOrders.length} Order(s)</Text>
+                <Text style={styles.infoValue} numberOfLines={1}>Deliver to customers in sequence</Text>
               </View>
             </View>
           )}
 
           <TouchableOpacity 
             style={styles.recenterBtn}
-            onPress={() => {
-              const stops = stores
-                .map(s => parseLocation(s.location))
-                .filter((l): l is NonNullable<typeof l> => !!l);
-              const customerLoc = parseLocation(selectedOrder?.addresses?.location);
-              if (customerLoc) stops.push(customerLoc);
-              fitToStops(stops);
-            }}
+            onPress={() => fitToStops(stops)}
           >
             <Icon name="crosshairs-gps" size={20} color={Colors.primary} />
             <Text style={styles.recenterText}>Fit View</Text>
