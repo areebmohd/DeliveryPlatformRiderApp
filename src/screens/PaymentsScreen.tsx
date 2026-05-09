@@ -102,12 +102,10 @@ const PaymentsScreen = ({ }: any) => {
         groups[date] = {
           total: 0,
           status: p.status,
-          utr: null,
           isToday: date === today
         };
       }
       groups[date].total += parseFloat(p.amount);
-      if (p.upi_transaction_id) groups[date].utr = p.upi_transaction_id;
       
       if (p.status !== 'sent' && groups[date].status === 'sent') {
           groups[date].status = p.status;
@@ -184,12 +182,7 @@ const PaymentsScreen = ({ }: any) => {
                     <Text style={styles.cardAmountText}>₹{data.total.toFixed(2)}</Text>
                   </View>
 
-                  {data.status === 'sent' && data.utr && (
-                    <View style={styles.utrSection}>
-                      <Text style={styles.utrLabel}>UTR Number</Text>
-                      <Text style={styles.utrValue}>{data.utr}</Text>
-                    </View>
-                  )}
+
 
                   {data.isToday && (
                     <View style={styles.todayInfoBox}>
@@ -265,9 +258,7 @@ const styles = StyleSheet.create({
   statusText: { fontSize: 11, fontWeight: '800', textTransform: 'uppercase' },
   cardAmountText: { fontSize: 20, fontWeight: '900', color: Colors.text },
   
-  utrSection: { marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: Colors.border + '50' },
-  utrLabel: { fontSize: 10, color: Colors.textSecondary, fontWeight: '600', textTransform: 'uppercase' },
-  utrValue: { fontSize: 12, fontWeight: '700', color: Colors.text, marginTop: 2 },
+
   
   todayInfoBox: { flexDirection: 'row', alignItems: 'center', marginTop: 12, gap: 8, padding: 10, backgroundColor: Colors.primary + '08', borderRadius: BorderRadius.md },
   todayInfoText: { fontSize: 11, color: Colors.textSecondary, fontWeight: '600', flex: 1 },

@@ -66,6 +66,24 @@ const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: numbe
   return R * c;
 };
 
+const getSlotStartTime = (slotStr: string, dateLabel: string) => {
+  if (!slotStr || dateLabel !== 'Today') return null;
+  
+  // Try to parse "2-3 PM", "2 PM", "02:00 PM", etc.
+  const match = slotStr.match(/(\d+)(?::(\d+))?\s*(AM|PM)/i);
+  if (!match) return null;
+  
+  let hours = parseInt(match[1]);
+  const minutes = match[2] ? parseInt(match[2]) : 0;
+  const ampm = match[3].toUpperCase();
+  
+  if (ampm === 'PM' && hours < 12) hours += 12;
+  if (ampm === 'AM' && hours === 12) hours = 0;
+  
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate(), hours, minutes, 0);
+};
+
 const parseLocation = (locString: string) => {
   if (!locString) return null;
   const match = locString.match(/POINT\(([-\d.]+) ([-\d.]+)\)/);
@@ -87,7 +105,7 @@ const parseLocation = (locString: string) => {
         longitude: hexToDouble(locString.substring(18, 34)),
         latitude: hexToDouble(locString.substring(34, 50)),
       };
-    } catch (e) {
+    } catch {
       return null;
     }
   }
@@ -133,7 +151,7 @@ const ProductItem = React.memo(({ item, items, storeOffer }: any) => {
   );
 });
 
-const StoreSection = React.memo(({ group, gIdx, order, navigation, onStorePickUp }: any) => {
+const StoreSection = React.memo(({ group, gIdx, order, navigation, onStorePickUp, processingId }: any) => {
   const storeOffer = order.applied_offers?.[group.id];
   const deliveryOffer = order.applied_offers?.[`${group.id}_delivery`];
   const isHistory = order.status === 'delivered' || order.status === 'cancelled';
@@ -219,10 +237,15 @@ const StoreSection = React.memo(({ group, gIdx, order, navigation, onStorePickUp
           </View>
         ) : (
           <TouchableOpacity 
-            style={styles.storePickupBtn}
-            onPress={() => onStorePickUp(order.id, group.id)}
+            style={[styles.storePickupBtn, processingId === `${group.id}_${order.id}` && { opacity: 0.7 }]}
+            onPress={() => onStorePickUp([order.id], group.id, `${group.id}_${order.id}`)}
+            disabled={processingId === `${group.id}_${order.id}`}
           >
-            <Text style={styles.storePickupBtnText}>Mark Picked Up</Text>
+            {processingId === `${group.id}_${order.id}` ? (
+              <ActivityIndicator color={Colors.dark} size="small" />
+            ) : (
+              <Text style={styles.storePickupBtnText}>Mark Picked Up</Text>
+            )}
           </TouchableOpacity>
         )
       )}
@@ -240,10 +263,12 @@ const OrderCard = React.memo(({
   onShowQr,
   otpValue,
   setOtpValue,
-  riderLocation
+  riderLocation,
+  processingId
 }: any) => {
   const isHistory = order.status === 'delivered' || order.status === 'cancelled';
   const isAvailable = order.rider_id === null;
+  const isProcessing = processingId === order.id;
 
   let statusLabel = '';
   let statusColor = Colors.text;
@@ -310,11 +335,36 @@ const OrderCard = React.memo(({
     return result;
   }, [order.order_items, order.stores, riderLocation]);
 
+  const totalDistance = React.useMemo(() => {
+    if (groups.length === 0 || !order.addresses?.location) return 0;
+    
+    let dist = 0;
+    let currentLoc = parseLocation(groups[0].location);
+    if (!currentLoc) return 0;
+
+    // Dist between stores
+    for (let i = 1; i < groups.length; i++) {
+      const nextLoc = parseLocation(groups[i].location);
+      if (nextLoc) {
+        dist += calculateDistance(currentLoc.latitude, currentLoc.longitude, nextLoc.latitude, nextLoc.longitude);
+        currentLoc = nextLoc;
+      }
+    }
+
+    // Last store to customer
+    const custLoc = parseLocation(order.addresses.location);
+    if (custLoc) {
+      dist += calculateDistance(currentLoc.latitude, currentLoc.longitude, custLoc.latitude, custLoc.longitude);
+    }
+    
+    return dist;
+  }, [groups, order.addresses?.location]);
+
   return (
     <View style={[styles.orderCard, isHistory && styles.historyCard]}>
       <View style={styles.orderHeader}>
         <View>
-          <Text style={styles.orderNumber}>#{order.order_number}</Text>
+          <Text style={styles.orderNumber}>#{order.order_number}{totalDistance > 0 ? ` • ${totalDistance.toFixed(1)} km` : ''}</Text>
           <View style={styles.badgeContainer}>
             <View style={[
               styles.statusBadge, 
@@ -353,12 +403,21 @@ const OrderCard = React.memo(({
           order={order} 
           navigation={navigation} 
           onStorePickUp={onStorePickUp} 
+          processingId={processingId}
         />
       ))}
 
       {isAvailable && (
-        <TouchableOpacity style={styles.acceptBtn} onPress={() => onAccept(order.id)}>
-          <Text style={styles.acceptBtnText}>Accept Delivery</Text>
+        <TouchableOpacity 
+          style={[styles.acceptBtn, isProcessing && { opacity: 0.7 }]} 
+          onPress={() => onAccept(order.id)}
+          disabled={isProcessing}
+        >
+          {isProcessing ? (
+            <ActivityIndicator color={Colors.dark} size="small" />
+          ) : (
+            <Text style={styles.acceptBtnText}>Accept Delivery</Text>
+          )}
         </TouchableOpacity>
       )}
 
@@ -409,10 +468,15 @@ const OrderCard = React.memo(({
                 onChangeText={setOtpValue}
               />
               <TouchableOpacity 
-                style={styles.completeBtn}
+                style={[styles.completeBtn, isProcessing && { opacity: 0.7 }]}
                 onPress={() => onComplete(order.id, order.delivery_otp)}
+                disabled={isProcessing}
               >
-                <Text style={styles.completeBtnText}>Complete</Text>
+                {isProcessing ? (
+                  <ActivityIndicator color={Colors.white} size="small" />
+                ) : (
+                  <Text style={styles.completeBtnText}>Complete</Text>
+                )}
               </TouchableOpacity>
             </View>
           </View>
@@ -426,7 +490,7 @@ const OrderCard = React.memo(({
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.appOfferTitle}>App Offer</Text>
-              <Text style={styles.appOfferDesc}>Free delivery above ₹99</Text>
+              <Text style={styles.appOfferDesc}>Free batch delivery above ₹29</Text>
             </View>
           </View>
         )}
@@ -463,15 +527,11 @@ const BatchCard = React.memo(({
   navigation, 
   onAccept, 
   onStorePickUp, 
-  onShowBreakdown, 
-  onComplete, 
-  onShowQr, 
   onShowOrderDetails,
-  otpInputs, 
-  setOtpInputs, 
-  riderLocation 
+  processingId
 }: any) => {
   const isAvailable = batch.rider_id === null;
+  const isProcessing = processingId === batch.id;
   
   // Aggregate stores and their products for the pickup phase
   const storesMap = React.useMemo(() => {
@@ -522,17 +582,97 @@ const BatchCard = React.memo(({
     return Object.values(map);
   }, [batch.orders]);
 
+  const totalBatchDistance = React.useMemo(() => {
+    if (!batch.orders || batch.orders.length === 0) return 0;
+
+    // Get unique stores in sequence (following storesMap logic)
+    const storesList: any[] = [];
+    batch.orders.forEach((order: any) => {
+      order.order_items.forEach((oi: any) => {
+        const s = oi.products?.stores || order.stores;
+        if (s && !storesList.find(item => item.id === s.id)) {
+          storesList.push(s);
+        }
+      });
+    });
+
+    // Get unique customer addresses in sequence
+    const addrList: any[] = [];
+    batch.orders.forEach((order: any) => {
+      if (order.addresses && !addrList.find(a => a.id === order.addresses.id)) {
+        addrList.push(order.addresses);
+      }
+    });
+
+    if (storesList.length === 0 || addrList.length === 0) return 0;
+
+    let dist = 0;
+    let currentLoc = parseLocation(storesList[0].location);
+    if (!currentLoc) return 0;
+
+    // Store to Store
+    for (let i = 1; i < storesList.length; i++) {
+      const nextLoc = parseLocation(storesList[i].location);
+      if (nextLoc) {
+        dist += calculateDistance(currentLoc.latitude, currentLoc.longitude, nextLoc.latitude, nextLoc.longitude);
+        currentLoc = nextLoc;
+      }
+    }
+
+    // Last store to first customer
+    const firstCustLoc = parseLocation(addrList[0].location);
+    if (firstCustLoc) {
+      dist += calculateDistance(currentLoc.latitude, currentLoc.longitude, firstCustLoc.latitude, firstCustLoc.longitude);
+      currentLoc = firstCustLoc;
+    }
+
+    // Customer to Customer
+    for (let i = 1; i < addrList.length; i++) {
+      const nextLoc = parseLocation(addrList[i].location);
+      if (nextLoc) {
+        dist += calculateDistance(currentLoc.latitude, currentLoc.longitude, nextLoc.latitude, nextLoc.longitude);
+        currentLoc = nextLoc;
+      }
+    }
+
+    return dist;
+  }, [batch.orders]);
+
+  const isFullyDelivered = batch.orders.every((o: any) => o.status === 'delivered' || o.status === 'cancelled');
+
+  const isAcceptanceClosed = React.useMemo(() => {
+    if (batch.date_label !== 'Today') return true;
+    
+    const startTime = getSlotStartTime(batch.delivery_slot, batch.date_label);
+    if (!startTime) return false;
+    
+    const now = new Date();
+    const oneHourBefore = new Date(startTime.getTime() - 60 * 60 * 1000);
+    
+    // Interpret "cannot accept 1 hour before" as "cannot accept until it is 1 hour before start time"
+    return now < oneHourBefore || now > startTime;
+  }, [batch.delivery_slot, batch.date_label]);
+
   return (
-    <View style={styles.batchCard}>
+    <View style={[styles.batchCard, isFullyDelivered && styles.historyCard]}>
       <View style={styles.batchHeader}>
         <View style={styles.batchTitleRow}>
           <View>
-            <Text style={styles.batchLabel}>{batch.delivery_slot} Batch</Text>
-            <Text style={styles.batchSublabel}>{batch.orders.length} Deliveries • {batch.date_label}</Text>
+            <Text style={styles.batchLabel}>
+              {batch.delivery_slot} Batch{totalBatchDistance > 0 ? ` • ${totalBatchDistance.toFixed(1)} km` : ''}
+            </Text>
+            <View style={styles.badgeContainer}>
+              <Text style={styles.batchSublabel}>{batch.orders.length} Orders • {batch.date_label}</Text>
+              {isFullyDelivered && (
+                <View style={[styles.statusBadge, styles.successBadge, { marginLeft: 8 }]}>
+                  <Text style={[styles.statusText, { color: Colors.success }]}>COMPLETED</Text>
+                </View>
+              )}
+            </View>
           </View>
         </View>
         
-        {!isAvailable && (
+        {!isAvailable && !isFullyDelivered && (
           <TouchableOpacity 
              style={styles.batchMapBtn}
              onPress={() => navigation.navigate('DeliveryMap', { 
@@ -565,13 +705,18 @@ const BatchCard = React.memo(({
                     </View>
                   ) : !isAvailable && (
                     <TouchableOpacity 
-                      style={styles.batchStorePickupBtn}
+                      style={[styles.batchStorePickupBtn, processingId === `${store.id}_${batch.id}` && { opacity: 0.7 }]}
                       onPress={() => {
                         // Mark picked up for all orders from this store in the batch
-                        store.orderIds.forEach((oid: number) => onStorePickUp(oid, store.id));
+                        onStorePickUp(store.orderIds, store.id, `${store.id}_${batch.id}`);
                       }}
+                      disabled={processingId === `${store.id}_${batch.id}`}
                     >
-                      <Text style={styles.batchStorePickupText}>Mark Picked Up</Text>
+                      {processingId === `${store.id}_${batch.id}` ? (
+                        <ActivityIndicator color={Colors.dark} size="small" />
+                      ) : (
+                        <Text style={styles.batchStorePickupText}>Mark Picked Up</Text>
+                      )}
                     </TouchableOpacity>
                   )}
                 </View>
@@ -617,15 +762,30 @@ const BatchCard = React.memo(({
       </View>
 
       {isAvailable && (
-        <TouchableOpacity style={styles.batchAcceptBtn} onPress={() => onAccept(batch.orders)}>
-          <Text style={styles.batchAcceptBtnText}>Accept Entire Batch</Text>
-        </TouchableOpacity>
+        isAcceptanceClosed ? (
+          <View style={styles.closedBatchBanner}>
+            <Icon name="clock-alert-outline" size={18} color={Colors.warning} />
+            <Text style={styles.closedBatchText}>Acceptance opens 1hr before start</Text>
+          </View>
+        ) : (
+          <TouchableOpacity 
+            style={[styles.batchAcceptBtn, isProcessing && { opacity: 0.7 }]} 
+            onPress={() => onAccept(batch.orders, batch.delivery_slot, batch.date_label, batch.id)}
+            disabled={isProcessing}
+          >
+            {isProcessing ? (
+              <ActivityIndicator color={Colors.dark} size="small" />
+            ) : (
+              <Text style={styles.batchAcceptBtnText}>Accept Entire Batch</Text>
+            )}
+          </TouchableOpacity>
+        )
       )}
 
       {!isAvailable && (
         <View style={styles.batchFooter}>
            <Text style={styles.batchFooterHint}>
-             {isAllPickedUp ? "All items collected. Deliver to customers." : "Go to Map for optimized pickup route."}
+             {isFullyDelivered ? "All orders delivered." : isAllPickedUp ? "All items collected. Deliver to customers." : "Go to Map for optimized pickup route."}
            </Text>
         </View>
       )}
@@ -640,6 +800,7 @@ const DeliveriesScreen = ({ navigation }: any) => {
   const [isVerified, setIsVerified] = useState<boolean | null>(null);
   const [otpInputs, setOtpInputs] = useState<{ [key: string]: string }>({});
   const [riderLocation, setRiderLocation] = useState<{ latitude: number, longitude: number } | null>(null);
+  const [processingId, setProcessingId] = useState<string | null>(null);
   const { showAlert } = useCustomAlert();
   const { checkProfileCompleteness } = useProfileCheck();
   const [breakdownModal, setBreakdownModal] = useState<{ visible: boolean; order: any }>({ 
@@ -798,22 +959,23 @@ const DeliveriesScreen = ({ navigation }: any) => {
 
       if (!grouped[label]) grouped[label] = [];
       
-      const isBatchOrder = !!order.delivery_slot && !isHistory;
+      const isBatchOrder = !!order.delivery_slot;
       
       if (isBatchOrder) {
         // Group into a virtual batch object. 
-        // We IGNORE the creation date and rider_id for the key to ensure ONE box per slot.
         let normalizedSlot = (order.delivery_slot || '').trim();
         const upperSlot = normalizedSlot.toUpperCase();
         if (upperSlot === '2 PM' || upperSlot === '2:00 PM') normalizedSlot = '2-3 PM';
         if (upperSlot === '8 PM' || upperSlot === '8:00 PM') normalizedSlot = '8-9 PM';
 
         const internalSlotKey = normalizedSlot.toLowerCase().replace(/slot/g, '').replace(/[^a-z0-9]/g, '');
-        // Force all batches to "Today" section for unified display
-        const batchLabel = 'Today';
+        
+        // Use the actual date label instead of hardcoded "Today"
+        const batchLabel = label;
         if (!grouped[batchLabel]) grouped[batchLabel] = [];
         
-        const slotKey = `batch_${internalSlotKey}`;
+        // Key MUST include date to prevent cross-day slot merging
+        const slotKey = `batch_${batchLabel}_${internalSlotKey}`;
         
         if (!batches[slotKey]) {
           batches[slotKey] = {
@@ -833,6 +995,11 @@ const DeliveriesScreen = ({ navigation }: any) => {
           batches[slotKey].rider_id = order.rider_id;
         }
         batches[slotKey].orders.push(order);
+
+        // If it's a history order, ALSO show it separately as requested
+        if (isHistory) {
+          grouped[label].push(order);
+        }
       } else {
         // Regular individual order
         grouped[label].push(order);
@@ -885,6 +1052,13 @@ const DeliveriesScreen = ({ navigation }: any) => {
       }, () => {
         fetchOrders();
       })
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'order_items'
+      }, () => {
+        fetchOrders();
+      })
       .subscribe();
 
     // Subscribe to verification status changes
@@ -924,11 +1098,26 @@ const DeliveriesScreen = ({ navigation }: any) => {
     getCurrentLocation();
   };
 
-  const handleAcceptBatch = async (batchOrders: any[]) => {
+  const handleAcceptBatch = useCallback(async (batchOrders: any[], slot: string, dateLabel: string, batchId: string) => {
     try {
-      setLoading(true);
+      setProcessingId(batchId);
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
+
+      // Re-verify cutoff in handler
+      const startTime = getSlotStartTime(slot, dateLabel);
+      if (startTime) {
+        const now = new Date();
+        const oneHourBefore = new Date(startTime.getTime() - 60 * 60 * 1000);
+        if (now < oneHourBefore) {
+          showAlert('Too Early', 'Acceptance for this batch opens 1 hour before the start time.');
+          return;
+        }
+        if (now > startTime) {
+          showAlert('Too Late', 'This batch has already started.');
+          return;
+        }
+      }
 
       const isProfileComplete = await checkProfileCompleteness(user.id);
       if (!isProfileComplete) return;
@@ -957,17 +1146,17 @@ const DeliveriesScreen = ({ navigation }: any) => {
 
       if (error) throw error;
       showAlert('Success', `Batch accepted! ${orderIds.length} orders are now in your active deliveries.`);
-      fetchOrders();
+      await fetchOrders();
     } catch (error: any) {
       showAlert('Error', error.message);
     } finally {
-      setLoading(false);
+      setTimeout(() => setProcessingId(null), 500);
     }
-  };
+  }, [checkProfileCompleteness, fetchOrders, showAlert]);
 
-  const handleAcceptOrder = async (orderId: string) => {
+  const handleAcceptOrder = useCallback(async (orderId: string) => {
     try {
-      setLoading(true);
+      setProcessingId(orderId);
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
@@ -1000,39 +1189,45 @@ const DeliveriesScreen = ({ navigation }: any) => {
 
       if (error) throw error;
       showAlert('Success', 'Order accepted! It is now in your active deliveries.');
-      fetchOrders();
+      await fetchOrders();
     } catch (error: any) {
       showAlert('Error', error.message);
     } finally {
-      setLoading(false);
+      setTimeout(() => setProcessingId(null), 500);
     }
-  };
+  }, [checkProfileCompleteness, fetchOrders, showAlert]);
 
-  const handleStorePickUp = async (orderId: string, storeId: string | undefined) => {
+  const handleStorePickUp = useCallback(async (orderIds: string[], storeId: string | undefined, pId: string) => {
     if (!storeId) {
       showAlert('Error', 'Missing store information.');
       return;
     }
     try {
-      setLoading(true);
+      setProcessingId(pId);
       
-      const { error } = await supabase.rpc('mark_store_items_picked_up', {
-        input_order_id: orderId,
-        input_store_id: storeId
-      });
+      const ids = Array.isArray(orderIds) ? orderIds : [orderIds];
       
+      // Execute all pick ups in parallel
+      const results = await Promise.all(ids.map(oid => 
+        supabase.rpc('mark_store_items_picked_up', {
+          input_order_id: oid,
+          input_store_id: storeId
+        })
+      ));
+      
+      const error = results.find(r => r.error)?.error;
       if (error) throw error;
 
       showAlert('Success', 'Store marked as picked up!');
-      fetchOrders();
+      await fetchOrders();
     } catch (error: any) {
       showAlert('Error', error.message);
     } finally {
-      setLoading(false);
+      setTimeout(() => setProcessingId(null), 500);
     }
-  };
+  }, [fetchOrders, showAlert]);
 
-  const handleCompleteOrder = async (orderId: string, correctOtp: string) => {
+  const handleCompleteOrder = useCallback(async (orderId: string, correctOtp: string) => {
     const enteredOtp = otpInputs[orderId];
     if (enteredOtp !== correctOtp) {
       showAlert('Invalid OTP', 'The OTP entered is incorrect. Please ask the customer for the correct OTP.');
@@ -1040,7 +1235,7 @@ const DeliveriesScreen = ({ navigation }: any) => {
     }
 
     try {
-      setLoading(true);
+      setProcessingId(orderId);
       const { error } = await supabase
         .from('orders')
         .update({ 
@@ -1050,16 +1245,16 @@ const DeliveriesScreen = ({ navigation }: any) => {
 
       if (error) throw error;
       showAlert('Success', 'Order delivered successfully!');
-      fetchOrders();
+      await fetchOrders();
     } catch (error: any) {
       showAlert('Error', error.message);
     } finally {
-      setLoading(false);
+      setTimeout(() => setProcessingId(null), 500);
     }
-  };
+  }, [fetchOrders, otpInputs, showAlert]);
 
-  const handleShowOrderDetails = (orders: any) => {
-    const ordersArray = Array.isArray(orders) ? orders : [orders];
+  const handleShowOrderDetails = (ordersList: any) => {
+    const ordersArray = Array.isArray(ordersList) ? ordersList : [ordersList];
     setOrderDetailsModal({ visible: true, orders: ordersArray });
   };
 
@@ -1121,6 +1316,10 @@ const DeliveriesScreen = ({ navigation }: any) => {
         <SectionList
           sections={sections}
           keyExtractor={(item) => item.id}
+          initialNumToRender={5}
+          maxToRenderPerBatch={5}
+          windowSize={5}
+          removeClippedSubviews={true}
           renderItem={({ item }) => {
             if (item.is_batch) {
               return (
@@ -1136,6 +1335,7 @@ const DeliveriesScreen = ({ navigation }: any) => {
                   otpInputs={otpInputs}
                   setOtpInputs={setOtpInputs}
                   riderLocation={riderLocation}
+                  processingId={processingId}
                 />
               );
             }
@@ -1151,6 +1351,7 @@ const DeliveriesScreen = ({ navigation }: any) => {
                 otpValue={otpInputs[item.id]}
                 setOtpValue={(text: string) => setOtpInputs(prev => ({ ...prev, [item.id]: text }))}
                 riderLocation={riderLocation}
+                processingId={processingId}
               />
             );
           }}
@@ -1340,6 +1541,7 @@ const DeliveriesScreen = ({ navigation }: any) => {
                     otpValue={otpInputs[order.id]}
                     setOtpValue={(text: string) => setOtpInputs(prev => ({ ...prev, [order.id]: text }))}
                     riderLocation={riderLocation}
+                    processingId={processingId}
                   />
                 </View>
               ))}
@@ -1897,13 +2099,6 @@ const styles = StyleSheet.create({
     color: Colors.text,
   },
   modalContent: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-  },
-  modalContent: {
     backgroundColor: Colors.white,
     borderTopLeftRadius: BorderRadius.xl,
     borderTopRightRadius: BorderRadius.xl,
@@ -2204,58 +2399,6 @@ const styles = StyleSheet.create({
     padding: Spacing.sm,
     marginBottom: Spacing.sm,
   },
-  batchOrderItem: {
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border + '50',
-  },
-  batchOrderHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  batchOrderNumber: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: Colors.text,
-  },
-  miniStatusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  miniStatusText: {
-    fontSize: 11,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-  },
-  batchOrderContent: {
-    gap: 4,
-  },
-  batchDetailRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  batchDetailText: {
-    fontSize: 13,
-    color: Colors.textSecondary,
-    fontWeight: '600',
-    flex: 1,
-  },
-  expandOrderBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 8,
-    alignSelf: 'flex-start',
-    gap: 4,
-  },
-  expandOrderText: {
-    fontSize: 13,
-    color: Colors.primary,
-    fontWeight: '700',
-  },
   batchAcceptBtn: {
     backgroundColor: Colors.primary,
     paddingVertical: 14,
@@ -2394,6 +2537,23 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Colors.primary,
     fontWeight: '700',
+  },
+  closedBatchBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FEF2F2',
+    padding: 12,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    gap: 8,
+    marginTop: Spacing.sm,
+  },
+  closedBatchText: {
+    color: Colors.danger,
+    fontWeight: '700',
+    fontSize: 13,
   },
 });
 

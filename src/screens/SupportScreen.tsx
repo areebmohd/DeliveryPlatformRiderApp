@@ -15,6 +15,7 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
 const SUPPORT_EMAIL = 'zorodeliveryapp@gmail.com';
 const SUPPORT_PHONE = '+91 7534846938';
+const WHATSAPP_GROUP_LINK = 'https://chat.whatsapp.com/DKOZQlWaIOTAUYU1miYRuj';
 
 const SupportActionCard = ({ 
   icon, 
@@ -68,6 +69,10 @@ const SupportScreen = ({ navigation }: any) => {
     Linking.openURL(`tel:${SUPPORT_PHONE}`);
   };
 
+  const handleJoinWhatsApp = () => {
+    Linking.openURL(WHATSAPP_GROUP_LINK);
+  };
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={Colors.primary} />
@@ -110,8 +115,16 @@ const SupportScreen = ({ navigation }: any) => {
             title="Email Support"
             subtitle="Best for account or payment issues"
             onPress={handleEmailSupport}
-            color={Colors.success}
-            secondaryColor="#F0FDF4"
+            color="#4F46E5"
+            secondaryColor="#E0E7FF"
+          />
+          <SupportActionCard 
+            icon="whatsapp"
+            title="WhatsApp Group"
+            subtitle="Join for latest updates and rider news"
+            onPress={handleJoinWhatsApp}
+            color="#25D366"
+            secondaryColor="#E7FFDB"
           />
         </View>
 
@@ -138,6 +151,8 @@ const SupportScreen = ({ navigation }: any) => {
         </View>
 
         {/* Removed FAQ section as requested */}
+
+
 
         <Text style={styles.footerNote}>
           For emergency situations during delivery, please prioritize your safety and contact local authorities if necessary.
@@ -296,6 +311,7 @@ const styles = StyleSheet.create({
     color: Colors.text,
     fontWeight: '600',
   },
+
 });
 
 export default SupportScreen;

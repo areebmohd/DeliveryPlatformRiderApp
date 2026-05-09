@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -19,21 +19,7 @@ const NotificationsScreen = ({ }: any) => {
   const [refreshing, setRefreshing] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
 
-  useEffect(() => {
-    initialize();
-  }, []);
-
-  const initialize = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      setUserId(user.id);
-      fetchNotifications(user.id);
-    } else {
-      setLoading(false);
-    }
-  };
-
-  const fetchNotifications = async (currentUserId?: string) => {
+  const fetchNotifications = useCallback(async (currentUserId?: string) => {
     try {
       const uid = currentUserId || userId;
       if (!uid) return;
@@ -77,7 +63,21 @@ const NotificationsScreen = ({ }: any) => {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [refreshing, userId]);
+
+  const initialize = useCallback(async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      setUserId(user.id);
+      fetchNotifications(user.id);
+    } else {
+      setLoading(false);
+    }
+  }, [fetchNotifications]);
+
+  useEffect(() => {
+    initialize();
+  }, [initialize]);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -85,7 +85,7 @@ const NotificationsScreen = ({ }: any) => {
   };
 
 
-  const renderItem = ({ item }: { item: any }) => (
+  const renderItem = useCallback(({ item }: { item: any }) => (
     <View style={styles.notificationCard}>
       <View style={styles.iconContainer}>
         <Icon name="message-alert-outline" size={22} color={Colors.primary} />
@@ -100,13 +100,13 @@ const NotificationsScreen = ({ }: any) => {
         <Text style={styles.notifDesc}>{item.description}</Text>
       </View>
     </View>
-  );
+  ), []);
 
-  const renderSectionHeader = ({ section: { title } }: any) => (
+  const renderSectionHeader = useCallback(({ section: { title } }: any) => (
     <View style={styles.sectionHeader}>
       <Text style={styles.sectionTitle}>{title}</Text>
     </View>
-  );
+  ), []);
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
@@ -124,6 +124,10 @@ const NotificationsScreen = ({ }: any) => {
           contentContainerStyle={styles.listContent}
           stickySectionHeadersEnabled={false}
           showsVerticalScrollIndicator={false}
+          initialNumToRender={8}
+          maxToRenderPerBatch={8}
+          windowSize={5}
+          removeClippedSubviews={true}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />
           }

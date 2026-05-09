@@ -15,12 +15,12 @@ import {
 import { Spacing } from '../theme/colors';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { supabase } from '../lib/supabaseClient';
-import { Colors, UI } from '../theme/colors';
+import { Colors } from '../theme/colors';
 import { useCustomAlert } from '../context/CustomAlertContext';
 
 const generateOTP = () => Math.floor(1000 + Math.random() * 9000).toString();
 
-const ReturnsScreen = ({ navigation }: any) => {
+const ReturnsScreen = ({ }: any) => {
   const { showAlert } = useCustomAlert();
   const [returns, setReturns] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -78,6 +78,21 @@ const ReturnsScreen = ({ navigation }: any) => {
 
   useEffect(() => {
     fetchReturns();
+
+    const returnsSubscription = supabase
+      .channel('rider_returns_all')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'returns'
+      }, () => {
+        fetchReturns();
+      })
+      .subscribe();
+
+    return () => {
+      if (returnsSubscription) returnsSubscription.unsubscribe();
+    };
   }, [fetchReturns]);
 
   const sections = useMemo(() => {
@@ -117,7 +132,7 @@ const ReturnsScreen = ({ navigation }: any) => {
     }));
   }, [returns]);
 
-  const handleAcceptReturn = async (returnId: string, returnType: string) => {
+  const handleAcceptReturn = useCallback(async (returnId: string) => {
     setProcessingId(returnId);
     try {
       const otp1 = generateOTP();
@@ -139,15 +154,15 @@ const ReturnsScreen = ({ navigation }: any) => {
 
       if (error) throw error;
       showAlert('✅ Return Accepted', 'You have been assigned this return. Please proceed to pick up the item from the customer.');
-      fetchReturns();
+      await fetchReturns();
     } catch (err: any) {
       showAlert('Error', err.message || 'Could not accept return');
     } finally {
-      setProcessingId(null);
+      setTimeout(() => setProcessingId(null), 500);
     }
-  };
+  }, [fetchReturns, showAlert, userId]);
 
-  const handleVerifyOTP = async (item: any, expectedOtp: string, nextStatus: string, isFinal: boolean = false) => {
+  const handleVerifyOTP = useCallback(async (item: any, expectedOtp: string, nextStatus: string, isFinal: boolean = false) => {
     if (otpInput !== expectedOtp) {
       showAlert('Invalid OTP', 'The OTP you entered is incorrect.');
       return;
@@ -170,7 +185,6 @@ const ReturnsScreen = ({ navigation }: any) => {
         if (item.image_url) {
           try {
             // Extract path from public URL
-            // URL format: https://.../storage/v1/object/public/products/returns/{userId}/{filename}
             const pathParts = item.image_url.split('/products/');
             if (pathParts.length > 1) {
               const filePath = pathParts[1];
@@ -185,13 +199,13 @@ const ReturnsScreen = ({ navigation }: any) => {
       }
       
       setOtpInput('');
-      fetchReturns();
+      await fetchReturns();
     } catch (err: any) {
       showAlert('Error', err.message || 'Failed to update status');
     } finally {
-      setProcessingId(null);
+      setTimeout(() => setProcessingId(null), 500);
     }
-  };
+  }, [fetchReturns, otpInput, showAlert]);
 
   const renderReturnItem = ({ item }: { item: any }) => {
     const isMine = item.rider_id === userId;
@@ -255,7 +269,7 @@ const ReturnsScreen = ({ navigation }: any) => {
         {isAvailable && (
           <TouchableOpacity 
             style={styles.acceptButton}
-            onPress={() => handleAcceptReturn(item.id, item.return_type)}
+            onPress={() => handleAcceptReturn(item.id)}
             disabled={processingId === item.id}
           >
             {processingId === item.id ? (

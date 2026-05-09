@@ -199,12 +199,12 @@ const DeliveryMapScreen = ({ route }: any) => {
     }
   }, [orderId, batchOrders]);
 
-  const fitToStops = useCallback((stops: any[]) => {
+  const fitToStops = useCallback((stopsToFit: any[]) => {
     if (!cameraRef.current || !riderLocation) return;
     
     const allCoords = [
       [riderLocation.longitude, riderLocation.latitude],
-      ...stops.map(s => [s.longitude, s.latitude])
+      ...stopsToFit.map(s => [s.longitude, s.latitude])
     ];
 
     // Simple bounding box calculation
