@@ -26,15 +26,11 @@ const PAYMENT_UPI_ID = 'Q369351522@ybl';
 const PAYMENT_PAYEE_NAME = 'Delivery Platform';
 
 const getRiderDeliveryFee = (order: any) => {
-  const appliedOffers = order.applied_offers || {};
-  const hasAppOffer = !!(appliedOffers.app_offer || appliedOffers.app_batch_offer || appliedOffers.app_fast_offer);
-  const hasStoreDeliveryOffer = Object.keys(appliedOffers).some(key => key.endsWith('_delivery'));
-
-  // If app offer is applied and NO store delivery offer, rider gets 0
-  if (hasAppOffer && !hasStoreDeliveryOffer) return 0;
-
-  const riderFee = Number(order.rider_delivery_fee ?? 0);
-  if (Number.isFinite(riderFee) && riderFee > 0) return riderFee;
+  const riderFee = order.rider_delivery_fee;
+  if (riderFee !== undefined && riderFee !== null) {
+    const val = Number(riderFee);
+    return Number.isFinite(val) ? val : 0;
+  }
 
   const customerFee = Number(order.delivery_fee ?? 0);
   return Number.isFinite(customerFee) ? customerFee : 0;
@@ -1044,7 +1040,7 @@ const DeliveriesScreen = ({ navigation }: any) => {
   const handleShowBreakdown = (order: any) => {
     setBreakdownModal({ 
       visible: true, 
-      order: { ...order, delivery_fee: getRiderDeliveryFee(order) } 
+      order 
     });
   };
 
@@ -1417,12 +1413,8 @@ const DeliveriesScreen = ({ navigation }: any) => {
                 storeShares[sName] += discounted;
               });
 
-              let displayDeliveryFee = getRiderDeliveryFee(order);
-              let displayPlatformFee = order.platform_fee || 0;
-
-              if (totalSponsoredDelivery > 0) {
-                displayPlatformFee += Math.max(0, totalSponsoredDelivery - displayDeliveryFee);
-              }
+              let displayDeliveryFee = Number(order.delivery_fee ?? 0) + totalSponsoredDelivery;
+              let displayPlatformFee = Number(order.platform_fee || 0);
 
               return (
                 <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
