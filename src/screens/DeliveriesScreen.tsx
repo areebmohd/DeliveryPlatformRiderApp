@@ -27,7 +27,7 @@ const PAYMENT_PAYEE_NAME = 'Delivery Platform';
 
 const getRiderDeliveryFee = (order: any) => {
   const appliedOffers = order.applied_offers || {};
-  const hasAppOffer = !!appliedOffers.app_offer;
+  const hasAppOffer = !!(appliedOffers.app_offer || appliedOffers.app_batch_offer || appliedOffers.app_fast_offer);
   const hasStoreDeliveryOffer = Object.keys(appliedOffers).some(key => key.endsWith('_delivery'));
 
   // If app offer is applied and NO store delivery offer, rider gets 0
@@ -483,14 +483,24 @@ const OrderCard = React.memo(({
         )}
 
         {/* App Offer Display */}
-        {order.applied_offers?.app_offer && (
+        {(order.applied_offers?.app_offer || order.applied_offers?.app_batch_offer || order.applied_offers?.app_fast_offer) && (
           <View style={styles.appOfferBadge}>
             <View style={styles.appOfferIconBox}>
-              <Icon name="ticket-percent" size={14} color={Colors.white} />
+              <Icon 
+                name={order.applied_offers?.app_fast_offer ? "flash" : "truck-delivery"} 
+                size={14} 
+                color={Colors.white} 
+              />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.appOfferTitle}>App Offer</Text>
-              <Text style={styles.appOfferDesc}>Free batch delivery above ₹29</Text>
+              <Text style={styles.appOfferTitle}>
+                {order.applied_offers?.app_fast_offer ? 'Free Fast Delivery' : 'Free Batch Delivery'}
+              </Text>
+              <Text style={styles.appOfferDesc}>
+                {order.applied_offers?.app_fast_offer 
+                  ? 'Free fast delivery above ₹99' 
+                  : `Free batch delivery above ₹${order.applied_offers?.app_batch_offer ? '49' : '29'}`}
+              </Text>
             </View>
           </View>
         )}
