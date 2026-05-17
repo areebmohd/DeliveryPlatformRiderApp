@@ -887,6 +887,28 @@ const DeliveriesScreen = ({ navigation }: any) => {
         setRefreshing(false);
         return;
       }
+
+      const riderVehicle = (riderProfile?.vehicle_type || 'bike').toLowerCase();
+
+      // Filter active orders based on vehicle and delivery type rules:
+      // - Standard bike orders (delivery_type !== 'batch' AND delivery_vehicle === 'bike') -> Bike riders only
+      // - Standard truck orders (delivery_type !== 'batch' AND delivery_vehicle === 'truck') -> Truck riders only
+      // - Batch orders (delivery_type === 'batch') -> Both riders, but only if they are bike deliveries
+      fetchedOrders = fetchedOrders.filter((order: any) => {
+        // If it is already assigned to this rider, always show it
+        if (order.rider_id === user.id) return true;
+
+        const isBatch = order.delivery_type === 'batch' || !!order.delivery_slot;
+        const vehicle = (order.delivery_vehicle || 'bike').toLowerCase();
+
+        if (isBatch) {
+          // Batch deliveries must have orders of bike deliveries only, and they appear in both accounts
+          return vehicle === 'bike';
+        } else {
+          // Standard deliveries appear in their respective vehicle accounts
+          return vehicle === riderVehicle;
+        }
+      });
       
       // Log all unassigned orders as offers for the rider
       const unassigned = fetchedOrders.filter(o => !o.rider_id);
@@ -1128,6 +1150,23 @@ const DeliveriesScreen = ({ navigation }: any) => {
       const isProfileComplete = await checkProfileCompleteness(user.id);
       if (!isProfileComplete) return;
 
+      // Check if any of the orders in this batch have already been accepted by another rider
+      const orderIds = batchOrders.map(o => o.id);
+      const { data: currentOrders, error: checkError } = await supabase
+        .from('orders')
+        .select('id, rider_id')
+        .in('id', orderIds);
+
+      if (checkError) throw checkError;
+
+      const acceptedByOther = currentOrders?.some(o => o.rider_id !== null && o.rider_id !== user.id);
+
+      if (acceptedByOther) {
+        showAlert('Conflict', 'delivery is accepted by another rider');
+        await fetchOrders();
+        return;
+      }
+
       // Check for active non-batch deliveries
       const { data: activeOrders } = await supabase
         .from('orders')
@@ -1144,7 +1183,6 @@ const DeliveriesScreen = ({ navigation }: any) => {
         return;
       }
 
-      const orderIds = batchOrders.map(o => o.id);
       const { error } = await supabase
         .from('orders')
         .update({ rider_id: user.id })
@@ -1169,6 +1207,21 @@ const DeliveriesScreen = ({ navigation }: any) => {
       // Check profile completeness before accepting
       const isProfileComplete = await checkProfileCompleteness(user.id);
       if (!isProfileComplete) return;
+
+      // Check if the order is already accepted by another rider
+      const { data: currentOrder, error: checkError } = await supabase
+        .from('orders')
+        .select('rider_id')
+        .eq('id', orderId)
+        .single();
+
+      if (checkError) throw checkError;
+
+      if (currentOrder && currentOrder.rider_id !== null && currentOrder.rider_id !== user.id) {
+        showAlert('Conflict', 'delivery is accepted by another rider');
+        await fetchOrders();
+        return;
+      }
 
       // Check if rider already has an active delivery
       const { data: activeOrders, error: activeError } = await supabase
