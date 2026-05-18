@@ -90,8 +90,8 @@ const DeliveryMapScreen = ({ route }: any) => {
         }))
         .filter(l => !!l.latitude)
         .sort((a, b) => {
-          const distA = calculateDistance(riderLocation.latitude, riderLocation.longitude, a.latitude, a.longitude);
-          const distB = calculateDistance(riderLocation.latitude, riderLocation.longitude, b.latitude, b.longitude);
+          const distA = calculateDistance(riderLocation.latitude, riderLocation.longitude, a.latitude!, a.longitude!);
+          const distB = calculateDistance(riderLocation.latitude, riderLocation.longitude, b.latitude!, b.longitude!);
           return distA - distB;
         });
     } else {
@@ -117,15 +117,47 @@ const DeliveryMapScreen = ({ route }: any) => {
       });
 
       calculatedStops = Array.from(pendingStores.values())
-        .map(s => ({
-          ...parseLocation(s.location),
-          id: s.id,
-          type: 'store'
-        }))
+        .map(s => {
+          const loc = parseLocation(s.location);
+          
+          // Calculate maximum remaining preparation time for this store
+          let maxStoreReadyAt = 0;
+          activeOrders.forEach(order => {
+            if (order.status !== 'picked_up') {
+              const hasUnpickedFromStore = order.order_items?.some((oi: any) => 
+                (oi.products?.stores?.id || order.stores?.id) === s.id && !oi.is_picked_up
+              );
+              if (hasUnpickedFromStore && order.ready_at) {
+                const readyTime = new Date(order.ready_at).getTime();
+                if (readyTime > maxStoreReadyAt) {
+                  maxStoreReadyAt = readyTime;
+                }
+              }
+            }
+          });
+          const remainingPrepMs = Math.max(0, maxStoreReadyAt - Date.now());
+
+          return {
+            ...loc,
+            id: s.id,
+            type: 'store',
+            remainingPrepMs
+          };
+        })
         .filter(l => !!l.latitude)
         .sort((a, b) => {
-          const distA = calculateDistance(riderLocation.latitude, riderLocation.longitude, a.latitude, a.longitude);
-          const distB = calculateDistance(riderLocation.latitude, riderLocation.longitude, b.latitude, b.longitude);
+          // 1. Ready stores go first before preparing stores
+          if (a.remainingPrepMs === 0 && b.remainingPrepMs > 0) return -1;
+          if (a.remainingPrepMs > 0 && b.remainingPrepMs === 0) return 1;
+
+          // 2. If both are preparing, sort by remaining preparation time (earlier ready goes first)
+          if (a.remainingPrepMs > 0 && b.remainingPrepMs > 0) {
+            return a.remainingPrepMs - b.remainingPrepMs;
+          }
+
+          // 3. If both are ready, sort by distance
+          const distA = calculateDistance(riderLocation.latitude, riderLocation.longitude, a.latitude!, a.longitude!);
+          const distB = calculateDistance(riderLocation.latitude, riderLocation.longitude, b.latitude!, b.longitude!);
           return distA - distB;
         });
     }

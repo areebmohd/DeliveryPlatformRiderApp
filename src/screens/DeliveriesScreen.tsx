@@ -269,8 +269,19 @@ const OrderCard = React.memo(({
   let statusLabel = '';
   let statusColor = Colors.text;
   if (order.status === 'waiting_for_pickup') {
-    statusLabel = 'WAITING FOR PICKUP';
-    statusColor = Colors.warning;
+    if (order.ready_at) {
+      const remainingMins = Math.ceil((new Date(order.ready_at).getTime() - Date.now()) / 60000);
+      if (remainingMins > 0) {
+        statusLabel = `PREPARING (Ready in ${remainingMins} min${remainingMins > 1 ? 's' : ''})`;
+        statusColor = '#E65100';
+      } else {
+        statusLabel = 'READY FOR PICKUP';
+        statusColor = Colors.success;
+      }
+    } else {
+      statusLabel = 'WAITING FOR PICKUP';
+      statusColor = Colors.warning;
+    }
   } else if (order.status === 'picked_up') {
     statusLabel = 'PICKED UP';
     statusColor = Colors.primary;
@@ -367,7 +378,9 @@ const OrderCard = React.memo(({
               order.status === 'delivered' ? styles.successBadge : 
               order.status === 'cancelled' ? styles.errorBadge : 
               order.status === 'picked_up' ? styles.pickedUpStatusBadge : 
-              styles.waitingBadge
+              (order.status === 'waiting_for_pickup' && order.ready_at && new Date(order.ready_at).getTime() > Date.now()) 
+                ? { backgroundColor: '#FFF9C4', borderColor: '#FFE082', borderWidth: 1 } 
+                : styles.waitingBadge
             ]}>
               <Text style={[styles.statusText, { color: statusColor }]}>{statusLabel}</Text>
             </View>
@@ -541,13 +554,13 @@ const BatchCard = React.memo(({
   
   // Aggregate stores and their products for the pickup phase
   const storesMap = React.useMemo(() => {
-    const map: { [key: string]: { id: string, name: string, products: any[], isPickedUp: boolean, orderIds: number[] } } = {};
+    const map: { [key: string]: { id: string, name: string, products: any[], isPickedUp: boolean, orderIds: number[], readyAt: string | null } } = {};
     batch.orders.forEach((order: any) => {
       order.order_items.forEach((oi: any) => {
         const storeId = oi.products?.stores?.id || order.stores?.id;
         const storeName = oi.products?.stores?.name || order.stores?.name || 'Store';
         if (!map[storeId]) {
-          map[storeId] = { id: storeId, name: storeName, products: [], isPickedUp: true, orderIds: [] };
+          map[storeId] = { id: storeId, name: storeName, products: [], isPickedUp: true, orderIds: [], readyAt: null };
         }
         map[storeId].products.push({
           ...oi.products,
@@ -556,6 +569,13 @@ const BatchCard = React.memo(({
         });
         if (!oi.is_picked_up) map[storeId].isPickedUp = false;
         if (!map[storeId].orderIds.includes(order.id)) map[storeId].orderIds.push(order.id);
+        
+        // Track the maximum ready_at for this store
+        if (order.ready_at) {
+          if (!map[storeId].readyAt || new Date(order.ready_at).getTime() > new Date(map[storeId].readyAt).getTime()) {
+            map[storeId].readyAt = order.ready_at;
+          }
+        }
       });
     });
     return Object.values(map);
@@ -597,9 +617,33 @@ const BatchCard = React.memo(({
       order.order_items.forEach((oi: any) => {
         const s = oi.products?.stores || order.stores;
         if (s && !storesList.find(item => item.id === s.id)) {
-          storesList.push(s);
+          // Calculate maximum remaining preparation time for this store in this batch
+          let maxStoreReadyAt = 0;
+          batch.orders.forEach((o: any) => {
+            const hasUnpickedFromStore = o.order_items?.some((item: any) => 
+              (item.products?.stores?.id || o.stores?.id) === s.id && !item.is_picked_up
+            );
+            if (hasUnpickedFromStore && o.ready_at) {
+              const readyTime = new Date(o.ready_at).getTime();
+              if (readyTime > maxStoreReadyAt) {
+                maxStoreReadyAt = readyTime;
+              }
+            }
+          });
+          const remainingPrepMs = Math.max(0, maxStoreReadyAt - Date.now());
+          storesList.push({ ...s, remainingPrepMs });
         }
       });
+    });
+
+    // Sort stores list so ready stores go first, preparing stores go later
+    storesList.sort((a, b) => {
+      if (a.remainingPrepMs === 0 && b.remainingPrepMs > 0) return -1;
+      if (a.remainingPrepMs > 0 && b.remainingPrepMs === 0) return 1;
+      if (a.remainingPrepMs > 0 && b.remainingPrepMs > 0) {
+        return a.remainingPrepMs - b.remainingPrepMs;
+      }
+      return 0;
     });
 
     // Get unique customer addresses in sequence
@@ -703,7 +747,31 @@ const BatchCard = React.memo(({
             {storesMap.map((store: any, idx: number) => (
               <View key={store.id} style={[styles.batchStoreItem, idx === storesMap.length - 1 && { borderBottomWidth: 0 }]}>
                 <View style={styles.batchStoreHeader}>
-                  <Text style={styles.batchStoreName}>{store.name}</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.batchStoreName}>{store.name}</Text>
+                    {!store.isPickedUp && store.readyAt && (() => {
+                      const remainingMins = Math.ceil((new Date(store.readyAt).getTime() - Date.now()) / (60 * 1000));
+                      if (remainingMins > 0) {
+                        return (
+                          <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
+                            <Icon name="pot-steam" size={12} color="#E65100" />
+                            <Text style={{ fontSize: 11, color: '#E65100', fontWeight: 'bold', marginLeft: 4 }}>
+                              Preparing: Ready in {remainingMins} min{remainingMins > 1 ? 's' : ''}
+                            </Text>
+                          </View>
+                        );
+                      } else {
+                        return (
+                          <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
+                            <Icon name="check-circle-outline" size={12} color={Colors.success} />
+                            <Text style={{ fontSize: 11, color: Colors.success, fontWeight: 'bold', marginLeft: 4 }}>
+                              Ready for Pickup
+                            </Text>
+                          </View>
+                        );
+                      }
+                    })()}
+                  </View>
                   {store.isPickedUp ? (
                     <View style={styles.miniSuccessBadge}>
                       <Icon name="check-circle" size={14} color={Colors.success} />
@@ -899,6 +967,7 @@ const DeliveriesScreen = ({ navigation }: any) => {
         if (order.rider_id === user.id) return true;
 
         const isBatch = order.delivery_type === 'batch' || !!order.delivery_slot;
+
         const vehicle = (order.delivery_vehicle || 'bike').toLowerCase();
 
         if (isBatch) {
