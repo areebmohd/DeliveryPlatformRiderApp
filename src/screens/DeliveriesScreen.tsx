@@ -838,7 +838,7 @@ const BatchCard = React.memo(({
       {isAvailable && (
         isAcceptanceClosed ? (
           <View style={styles.closedBatchBanner}>
-            <Icon name="clock-alert-outline" size={18} color={Colors.warning} />
+            <Icon name="clock-alert-outline" size={18} color={Colors.danger} />
             <Text style={styles.closedBatchText}>Acceptance opens 1hr before start</Text>
           </View>
         ) : (
