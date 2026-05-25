@@ -73,29 +73,12 @@ const SignUpScreen = ({ navigation }: Props) => {
 
       if (error) {
         if (error.message.toLowerCase().includes('already registered') || error.message.toLowerCase().includes('already been taken')) {
-          // If already registered, it might be an unconfirmed user wanting to retry
-          try {
-            const { error: resendError } = await supabase.auth.resend({
-              type: 'signup',
-              email: email.toLowerCase().trim(),
-            });
-            
-            if (resendError) {
-              showAlert('Account Exists', 'This email is already registered. Please login instead.');
-            } else {
-              showAlert('Welcome Back', 'Your account exists but is not verified. A new verification code has been sent.');
-              navigation.navigate('VerifyEmailOTP', { email: email.toLowerCase().trim() });
-            }
-          } catch {
-            showAlert('Account Exists', 'An account with this email already exists. Please login instead.');
-          }
+          showAlert('Account Exists', 'This email is already registered. Please login instead.');
           return;
         }
         showAlert('Sign up failed', error.message);
-      } else if (!session) {
-        // If no session is returned, it means email verification is required (OTP or Link)
-        showAlert('Success', 'Verification code sent! Please check your email.');
-        navigation.navigate('VerifyEmailOTP', { email: email.toLowerCase().trim() });
+      } else {
+        showAlert('Success', 'Account created successfully! Welcome to Zoro Rider.');
       }
     } catch (e: any) {
       showAlert('Error', e.message || 'An unexpected error occurred');

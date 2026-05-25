@@ -2,7 +2,6 @@ export type AuthStackParamList = {
   Login: undefined;
   SignUp: undefined;
   ForgotPassword: undefined;
-  VerifyEmailOTP: { email: string };
   VerifyResetOTP: { email: string };
   ResetPassword: { email: string };
   ProfileSetup: { isEditing?: boolean };

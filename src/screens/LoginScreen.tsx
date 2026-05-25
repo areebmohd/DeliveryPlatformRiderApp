@@ -39,21 +39,7 @@ const LoginScreen = ({ navigation }: Props) => {
       });
 
       if (authError) {
-        if (authError.message.toLowerCase().includes('email not confirmed')) {
-          // Send OTP and navigate to verification
-          try {
-            await supabase.auth.resend({
-              type: 'signup',
-              email: email.toLowerCase().trim(),
-            });
-            showAlert('Verification Required', 'Your email is not verified. A new code has been sent.');
-            navigation.navigate('VerifyEmailOTP', { email: email.toLowerCase().trim() });
-          } catch (resendError: any) {
-            showAlert('Login failed', resendError.message || authError.message);
-          }
-        } else {
-          showAlert('Login failed', authError.message);
-        }
+        showAlert('Login failed', authError.message);
         setLoading(false);
         return;
       }

@@ -5,7 +5,6 @@ import SignUpScreen from '../screens/SignUpScreen';
 import ProfileSetupScreen from '../screens/ProfileSetupScreen';
 import ForgotPasswordScreen from '../screens/ForgotPasswordScreen';
 import VerifyResetOTPScreen from '../screens/VerifyResetOTPScreen';
-import VerifyEmailOTPScreen from '../screens/VerifyEmailOTPScreen';
 import ResetPasswordScreen from '../screens/ResetPasswordScreen';
 import { AuthStackParamList } from './types';
 import { Colors } from '../theme/colors';
@@ -61,13 +60,7 @@ const AuthNavigator = () => {
           title: 'Forgot Password'
         }} 
       />
-      <Stack.Screen 
-        name="VerifyEmailOTP" 
-        component={VerifyEmailOTPScreen} 
-        options={{ 
-          title: 'Verify Email'
-        }} 
-      />
+
       <Stack.Screen 
         name="VerifyResetOTP" 
         component={VerifyResetOTPScreen} 
