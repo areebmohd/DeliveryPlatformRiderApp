@@ -44,7 +44,7 @@ export const NotificationProvider = ({ children, userId }: { children: React.Rea
 
           await notificationService.displayLocalNotification(
             payload.new.title,
-            payload.new.body,
+            payload.new.description,
             payload.new.data
           );
         }

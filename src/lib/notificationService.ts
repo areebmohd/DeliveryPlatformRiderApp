@@ -8,7 +8,7 @@ class NotificationService {
     // 1. Setup Notifee Channels (Android)
     if (Platform.OS === 'android') {
       await notifee.createChannel({
-        id: 'delivery-alerts',
+        id: 'delivery-platform-notifications',
         name: 'Delivery Alerts',
         lights: true,
         vibration: true,
@@ -62,7 +62,7 @@ class NotificationService {
       title,
       body,
       android: {
-        channelId: 'delivery-alerts',
+        channelId: 'delivery-platform-notifications',
         importance: AndroidImportance.HIGH,
         pressAction: {
           id: 'default',
