@@ -173,7 +173,11 @@ const DeliveryMapScreen = ({ route }: any) => {
         });
       },
       (error) => console.log('Current Location Error:', error),
-      { enableHighAccuracy: true }
+      { 
+        enableHighAccuracy: true,
+        showLocationDialog: true,
+        forceRequestLocation: true,
+      }
     );
   }, []);
 
@@ -322,7 +326,12 @@ const DeliveryMapScreen = ({ route }: any) => {
         });
       },
       (error) => console.log('Watch Error:', error),
-      { enableHighAccuracy: true, distanceFilter: 10 }
+      { 
+        enableHighAccuracy: true, 
+        distanceFilter: 10,
+        showLocationDialog: true,
+        forceRequestLocation: true,
+      }
     );
 
     // Real-time subscription for order updates (including pickup status)

@@ -31,6 +31,8 @@ export const useRiderLocation = (userId: string | undefined) => {
         distanceFilter: 10,   // Update every 10 meters
         interval: 10000,       // Or every 10 seconds
         fastestInterval: 5000,
+        showLocationDialog: true,       // System Google Play Services high-accuracy location prompt!
+        forceRequestLocation: true,     // Force Android to use Play Services GPS when app is working
       }
     );
   }, [userId]);
