@@ -507,8 +507,8 @@ const OrderCard = React.memo(({
               </Text>
               <Text style={styles.appOfferDesc}>
                 {order.applied_offers?.app_fast_offer 
-                  ? 'Free fast delivery above ₹149' 
-                  : `Free batch delivery above ₹${order.applied_offers?.app_batch_offer ? '49' : '29'}`}
+                  ? `Free fast delivery above ₹${order.applied_offers?.app_fast_offer?.conditions?.min_price ?? 149}` 
+                  : `Free batch delivery above ₹${order.applied_offers?.app_batch_offer?.conditions?.min_price ?? order.applied_offers?.app_offer?.conditions?.min_price ?? (order.applied_offers?.app_batch_offer ? 49 : 29)}`}
               </Text>
             </View>
           </View>
